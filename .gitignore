@@ -1,0 +1,22 @@
+## .gitignore file to use with MPLAB X and Emacs
+
+#Microchip MPLAB X Files to Ignore
+*/build/*
+*/nbproject/Makefile*
+*/nbproject/Package*
+*/nbproject/private/*
+*/disassembly/*
+*/dist/default/debug/*
+*.production.cof
+*.production.map
+*.production.elf
+*.hex
+
+# codewright
+*.bak
+
+# Emacs Files to Ignore
+*~
+*#
+*.old
+
