@@ -262,9 +262,6 @@ void InitializeA36613(void)
 
 
 
-  Nop();
-  Nop();
-  Nop();
   SetupLTC265X(&U4_LTC2654, ETM_SPI_PORT_2, FCY_CLK, LTC265X_SPI_2_5_M_BIT, _PIN_RE6, _PIN_RE7);
 
   InitializeA36613Serial();
@@ -284,6 +281,19 @@ void InitializeA36613(void)
   ClearSmpsADCIntPair3();
   ClearSmpsADCIntPair4();
   ClearSmpsADCIntPair5();
+  _ADCP0IE = 1;
+  _ADCP1IE = 1;
+  _ADCP2IE = 1;
+  _ADCP3IE = 1;
+  _ADCP4IE = 1;
+  _ADCP5IE = 1;
+  _ADCP0IP = 2;
+  _ADCP1IP = 2;
+  _ADCP2IP = 2;
+  _ADCP3IP = 2;
+  _ADCP4IP = 2;
+  _ADCP5IP = 2;
+
 
   heater_voltage_accumulator_size = 64;
   top1_voltage_accumulator_size = 64;
