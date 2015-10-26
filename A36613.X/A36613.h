@@ -3,23 +3,26 @@
 #define __A36613_H
 
 
-#define FCY_CLK 30000000
+#define FCY_CLK 31000000
 
 #include <xc.h>
-#include <33fXXXXX.h>
 #include <smpsadc.h>
 #include <timer.h>
 #include <smpspwm.h>
 
 
 #include "ETM.h"
+#include "A36613SERIAL.h"
+#include "Buffer64.h"
 
 /*
   
   Hardware Module Resource Usage
 
   SPI2   - Used/Configured by LTC265X Module
-  Timer3 - 10ms timer 
+ Timer 4 - UART RX
+ * Timer5 - UART TX
+ * Timer3 - 10ms timer
   Timer1 - Triggers ADC conversion for all channels
   ADC Module
   PWM module
@@ -78,7 +81,7 @@
    Period should be set to 10mS
 */
 #define T3CON_VALUE                    (T3_ON & T3_IDLE_CON & T3_GATE_OFF & T3_PS_1_8 & T3_SOURCE_INT)
-#define PR3_PERIOD_US                  10000   // 10mS
+#define PR3_PERIOD_US                  100000   // 10mS
 #define PR3_VALUE_10_MILLISECONDS      (unsigned int)((FCY_CLK / 1000000)*PR3_PERIOD_US/8)
 
 
@@ -91,17 +94,27 @@
 
 // -------------------  PWM Configuration ----------------- //
 
+#define PWM_FREQUENCY_KHZ   300
+#define ACLK_FREQUENCY      120000000
+#define PWM_PERIOD          1350// (1/(PWM_FREQUENCY_KHZ*1000)*(10^9/1.04)*(1/PWM_PRESCALER)
+#define PWM_PRESCALER       2
+#define INITIAL_PWM_DC_PERCENT      33
+#define INITIAL_PWM_DC      500//  ((INITIAL_PWM_DC_PERCENT/100)*PWM_PERIOD)
+
 
 
 // -------------------  ADC CONFIGURATION ----------------- //
 //Set to trigger on TMR1 period match;
 //set all channels to interrupt with priority 2
 #define ADCON_SETTING           (ADC_MOD_DIS|ADC_IDLE_DISCONT|ADC_SLCLKDIV_DIS|ADC_SOFT_TRIG_EN|ADC_DATA_INT|ADC_INT_EN_2CONV|ADC_ORDER_EVEN_FST|ADC_SAMP_SIM|ADC_SAMP_TRIG| ADC_PLL_DIS_FADC_4)
-#define ADPCFG_SETTING          (ADC_PORT_PIN0_DIG|ADC_PORT_PIN1_AN|ADC_PORT_PIN2_DIG|ADC_PORT_PIN3_AN|ADC_PORT_PIN4_AN|ADC_PORT_PIN5_AN|ADC_PORT_PIN6_DIG|ADC_PORT_PIN7_AN|ADC_PORT_PIN8_AN|ADC_PORT_PIN9_ANADC_PORT_PIN10_AN)
+#define ADPCFG_SETTING          (ADC_PORT_PIN0_DIG|ADC_PORT_PIN1_AN|ADC_PORT_PIN2_DIG|ADC_PORT_PIN3_AN|ADC_PORT_PIN4_AN|ADC_PORT_PIN5_AN|ADC_PORT_PIN6_DIG|ADC_PORT_PIN7_AN|ADC_PORT_PIN8_AN|ADC_PORT_PIN9_AN | ADC_PORT_PIN10_AN)
 #define ADCPC0_SETTING          (ADC_AN3_2_IR_GEN_EN | ADC_AN3_2_TRIG_TMR1 | ADC_AN3_2_INT_PR2 | ADC_AN1_0_IR_GEN_EN | ADC_AN1_0_TRIG_TMR1 | ADC_AN1_0_INT_PR2) 
 #define ADCPC1_SETTING          (ADC_AN7_6_IR_GEN_EN | ADC_AN7_6_TRIG_TMR1 | ADC_AN7_6_INT_PR2 | ADC_AN5_4_IR_GEN_EN | ADC_AN5_4_TRIG_TMR1| ADC_AN5_4_INT_PR2 )
 #define ADCPC2_SETTING          (ADC_AN11_10_IR_GEN_EN | ADC_AN11_10_TRIG_TMR1 | ADC_AN11_10_INT_PR2 | ADC_AN9_8_IR_GEN_EN | ADC_AN9_8_TRIG_TMR1 |ADC_AN9_8_INT_PR2)
 
+#define STATE_STARTUP   0x10
+#define STATE_READY     0x20
+#define STATE_FAULT  0x30
 
 
 typedef struct {
@@ -125,6 +138,8 @@ typedef struct {
 } ControlData;
 
 extern ControlData global_data_A36613;
+extern BUFFER64BYTE uart1_input_buffer;
+extern BUFFER64BYTE uart1_output_buffer;
 
 
 #endif
