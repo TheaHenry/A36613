@@ -9,7 +9,7 @@
 #include <smpsadc.h>
 #include <timer.h>
 #include <smpspwm.h>
-
+#include <dsp.h>
 
 #include "ETM.h"
 #include "A36613SERIAL.h"
@@ -81,14 +81,14 @@
    Period should be set to 10mS
 */
 #define T3CON_VALUE                    (T3_ON & T3_IDLE_CON & T3_GATE_OFF & T3_PS_1_8 & T3_SOURCE_INT)
-#define PR3_PERIOD_US                  100000   // 10mS
+#define PR3_PERIOD_US                  10000   // 10mS
 #define PR3_VALUE_10_MILLISECONDS      (unsigned int)((FCY_CLK / 1000000)*PR3_PERIOD_US/8)
 
 
 //TMR1 Configuration 
 //Timer 1 used to trigger ADC conversion every 5us.
 #define T1CON_VALUE                    (T1_ON & T1_IDLE_CON & T1_GATE_OFF & T1_PS_1_8 & T1_SOURCE_INT)
-#define PR1_PERIOD_US                  5   // 5uS
+#define PR1_PERIOD_US                  10   // 10uS
 #define PR1_VALUE_5_US      (unsigned int)((FCY_CLK / 1000000)*PR1_PERIOD_US/8)
 
 
@@ -114,25 +114,30 @@
 
 #define STATE_STARTUP   0x10
 #define STATE_READY     0x20
-#define STATE_FAULT  0x30
+#define STATE_FAULT     0x30
+
+
+//---------------    Heater PID  ------------------------//
+#define Heater_Kp Q15(0.01)
+#define Heater_Ki Q15(0.0)
+#define Heater_Kd Q15(0)
 
 
 typedef struct {
   unsigned int control_state;
   unsigned int heater_set_voltage;
-  unsigned int heater_output_voltage; //needs to be an 8bit number
+  unsigned int heater_output_voltage;
   unsigned int top1_set_voltage;
-  unsigned int top1_dac_setting_scaled;
   unsigned int top2_set_voltage;
-  unsigned int top2_dac_setting_scaled;
-  unsigned int top1_voltage_monitor; //needs to be an 8bit number
-  unsigned int top2_voltage_monitor; //needs to be an 8bit number
+  unsigned int top1_voltage_monitor; 
+  unsigned int top2_voltage_monitor;
   unsigned int top1_voltage_feedback;
   unsigned int top2_voltage_feedback;
-  unsigned int heater1_current_monitor; //needs to be an 8bit number
-  unsigned int heater2_current_monitor; //needs to be an 8bit number
+  unsigned int heater1_current_monitor;
+  unsigned int heater2_current_monitor;
   unsigned int bias_feedback;
-  unsigned int top_feedback;
+//  unsigned int top_feedback;
+  unsigned int heater_enable;
   unsigned char status;
 
 } ControlData;

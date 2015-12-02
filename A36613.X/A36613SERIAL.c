@@ -9,10 +9,14 @@
 typedef struct
 {
   //unsigned char command_byte;
-  unsigned char top1_set;
-  unsigned char top2_set;
-  unsigned char heater_set;
-  unsigned char heater_enable;
+  unsigned char top1_set_hi;
+  unsigned char top1_set_lo;
+  unsigned char top2_set_hi;
+  unsigned char top2_set_lo;
+  unsigned char heater_set_hi;
+  unsigned char heater_set_lo;
+  unsigned char heater_enable_hi;
+  unsigned char heater_enable_lo;
 }InputData;
 
 InputData A36613inputdata;
@@ -21,7 +25,7 @@ InputData A36613inputdata;
 // possible commands (application specific):
 
 
-#define COMMAND_LENGTH 6
+#define COMMAND_LENGTH 12
 #define A36613_SERIAL_UART_BRG_VALUE   (unsigned int)(((FCY_CLK/A36613_SERIAL_BAUDRATE)/16)-1)
 
 #define SERIAL_UART_INT_PRI 5
@@ -55,7 +59,7 @@ BUFFER64BYTE uart1_output_buffer;
 
 //void A36613MakeCRC(unsigned OutputData* data);
 //int A36613CheckCRC(unsigned InputData* data);
-void A36613LoadData(void); //Moves data from main global structure to output buffer and generates CRC.
+void A36613LoadData(int data); //Moves data from main global structure to output buffer and generates CRC.
 void A36613DownloadData(void); //Checks CRC and if good - moves data from input buffer to main global variable.
 
 
@@ -78,28 +82,53 @@ void InitializeA36613Serial(void)
 }
 
 
-void A36613LoadData(void)
+void A36613LoadData(int message_type)
 {
   unsigned int crc= 0x5555;
-  Buffer64WriteByte(&uart1_output_buffer,FEEDBACK_MSG);
-  Buffer64WriteByte(&uart1_output_buffer, (global_data_A36613.top_feedback >> 8));
-  Buffer64WriteByte(&uart1_output_buffer, (global_data_A36613.top_feedback & 0x00FF));
+  Buffer64WriteByte(&uart1_output_buffer,message_type);
+  Buffer64WriteByte(&uart1_output_buffer, global_data_A36613.status);
+  Buffer64WriteByte(&uart1_output_buffer, (global_data_A36613.top1_voltage_feedback >> 8));
+  Buffer64WriteByte(&uart1_output_buffer, (global_data_A36613.top1_voltage_feedback & 0x00FF));
+  Buffer64WriteByte(&uart1_output_buffer, (global_data_A36613.top2_voltage_feedback >> 8));
+  Buffer64WriteByte(&uart1_output_buffer, (global_data_A36613.top2_voltage_feedback & 0x00FF));
   Buffer64WriteByte(&uart1_output_buffer, (global_data_A36613.bias_feedback >> 8));
   Buffer64WriteByte(&uart1_output_buffer, (global_data_A36613.bias_feedback & 0x00FF));
-  Buffer64WriteByte(&uart1_output_buffer, (global_data_A36613.top1_voltage_monitor & 0x00FF));
-  Buffer64WriteByte(&uart1_output_buffer, (global_data_A36613.top2_voltage_monitor & 0x00FF));
-  Buffer64WriteByte(&uart1_output_buffer, (global_data_A36613.heater_output_voltage & 0x00FF));
-  Buffer64WriteByte(&uart1_output_buffer, (global_data_A36613.heater1_current_monitor & 0x00FF));
-  Buffer64WriteByte(&uart1_output_buffer, (global_data_A36613.heater2_current_monitor & 0x00FF));
-  Buffer64WriteByte(&uart1_output_buffer, global_data_A36613.status);
+  switch (message_type) 
+  {
+    case (TOP1_FEEDBACK_MSG):
+      Buffer64WriteByte(&uart1_output_buffer, (global_data_A36613.top1_voltage_monitor >> 8));
+      Buffer64WriteByte(&uart1_output_buffer, (global_data_A36613.top1_voltage_monitor & 0x00FF));
+    break;
+
+    case (TOP2_FEEDBACK_MSG):
+      Buffer64WriteByte(&uart1_output_buffer, (global_data_A36613.top2_voltage_monitor >> 8));
+      Buffer64WriteByte(&uart1_output_buffer, (global_data_A36613.top2_voltage_monitor & 0x00FF));
+    break;
+
+    case (HTRV_FEEDBACK_MSG):
+      Buffer64WriteByte(&uart1_output_buffer, (global_data_A36613.heater_output_voltage >> 8));
+      Buffer64WriteByte(&uart1_output_buffer, (global_data_A36613.heater_output_voltage & 0x00FF));
+    break;
+
+    case (HTRI1_FEEDBACK_MSG):
+      Buffer64WriteByte(&uart1_output_buffer, (global_data_A36613.heater1_current_monitor >> 8));
+      Buffer64WriteByte(&uart1_output_buffer, (global_data_A36613.heater1_current_monitor & 0x00FF));
+    break;
+
+    case (HTRI2_FEEDBACK_MSG):
+      Buffer64WriteByte(&uart1_output_buffer, (global_data_A36613.heater2_current_monitor >> 8));
+      Buffer64WriteByte(&uart1_output_buffer, (global_data_A36613.heater2_current_monitor & 0x00FF));
+    break;
+
+  }
   Buffer64WriteByte(&uart1_output_buffer, (crc >> 8)); //should be crc hi
   Buffer64WriteByte(&uart1_output_buffer, (crc & 0xFF)); //should be crc lo
 };
 
 
-void A36613TransmitData(void)
+void A36613TransmitData(int message_type)
 {
-  A36613LoadData();
+  A36613LoadData(message_type);
   if ((!UART_STATS_BITS.UTXBF) && (Buffer64IsNotEmpty(&uart1_output_buffer)) )
   { //fill TX REG and then wait for interrupt to fill the rest.
     U1TXREG =  Buffer64ReadByte(&uart1_output_buffer);
@@ -114,16 +143,27 @@ void A36613ReceiveData(void)
     unsigned char read_byte;
     unsigned int crc;
     read_byte = Buffer64ReadByte(&uart1_input_buffer);
-    if (read_byte == SETTINGS_MSG) {
-      // All of the sync bytes matched, this should be a valid command
-    A36613inputdata.top1_set   = Buffer64ReadByte(&uart1_input_buffer);
-    A36613inputdata.top2_set = Buffer64ReadByte(&uart1_input_buffer);
-    A36613inputdata.heater_set  = Buffer64ReadByte(&uart1_input_buffer);
-    A36613inputdata.heater_enable  = Buffer64ReadByte(&uart1_input_buffer);
-    crc = Buffer64ReadByte(&uart1_input_buffer);
-    crc = (crc << 8) + Buffer64ReadByte(&uart1_input_buffer);
-    if (crc == 0x5555)
-      A36613DownloadData();
+    if (read_byte == SETTINGS_MSG) 
+    {
+      read_byte = Buffer64ReadByte(&uart1_input_buffer);
+      if (read_byte == 0)
+      {
+
+          // All of the sync bytes matched, this should be a valid command
+          A36613inputdata.top1_set_hi  = Buffer64ReadByte(&uart1_input_buffer);
+          A36613inputdata.top1_set_lo  = Buffer64ReadByte(&uart1_input_buffer);
+          A36613inputdata.top2_set_hi = Buffer64ReadByte(&uart1_input_buffer);
+          A36613inputdata.top2_set_lo = Buffer64ReadByte(&uart1_input_buffer);
+          A36613inputdata.heater_set_hi  = Buffer64ReadByte(&uart1_input_buffer);
+          A36613inputdata.heater_set_lo  = Buffer64ReadByte(&uart1_input_buffer);
+          A36613inputdata.heater_enable_hi  = Buffer64ReadByte(&uart1_input_buffer);
+          A36613inputdata.heater_enable_lo  = Buffer64ReadByte(&uart1_input_buffer);
+          crc = Buffer64ReadByte(&uart1_input_buffer);
+          crc = (crc << 8) + Buffer64ReadByte(&uart1_input_buffer);
+          if (crc == 0x5555)
+          A36613DownloadData();
+        
+      }
     }
   }
 }
@@ -131,13 +171,18 @@ void A36613ReceiveData(void)
 
 void A36613DownloadData(void)
 {
-  unsigned int heater_state;
-  global_data_A36613.top1_set_voltage = A36613inputdata.top1_set;
-  global_data_A36613.top2_set_voltage = A36613inputdata.top2_set;
-  global_data_A36613.heater_set_voltage = A36613inputdata.heater_set;
-  heater_state = A36613inputdata.heater_enable;
-  if (heater_state == 0xFF)
-    global_data_A36613.status |= 0x01;
+  global_data_A36613.top1_set_voltage = A36613inputdata.top1_set_hi;
+  global_data_A36613.top1_set_voltage <<=8;
+  global_data_A36613.top1_set_voltage = global_data_A36613.top1_set_voltage + A36613inputdata.top1_set_lo;
+  global_data_A36613.top2_set_voltage = A36613inputdata.top2_set_hi;
+  global_data_A36613.top2_set_voltage <<=8;
+  global_data_A36613.top2_set_voltage = global_data_A36613.top2_set_voltage + A36613inputdata.top2_set_lo;
+  global_data_A36613.heater_set_voltage = A36613inputdata.heater_set_hi;
+  global_data_A36613.heater_set_voltage <<=8;
+  global_data_A36613.heater_set_voltage = global_data_A36613.heater_set_voltage + A36613inputdata.heater_set_lo;
+  global_data_A36613.heater_enable = A36613inputdata.heater_enable_hi;
+  global_data_A36613.heater_enable <<=8;
+  global_data_A36613.heater_enable = global_data_A36613.heater_enable + A36613inputdata.heater_enable_lo;
 }
 
 

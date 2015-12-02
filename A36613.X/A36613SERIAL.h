@@ -22,7 +22,7 @@
 
 
 // User Configuration Parameters
-#define A36613_SERIAL_BAUDRATE        1843200//9600//  //
+#define A36613_SERIAL_BAUDRATE        9600//460800//625000//1843200//9600//  //
 #define A36613_SERIAL_UART_INT_PRI     4
 
 #define COMMAND_BUFFER_EMPTY  0x00
@@ -32,16 +32,17 @@
 #define A36613_SERIAL_UART_STA_VALUE   (UART_INT_TX & UART_TX_ENABLE & UART_SYNC_BREAK_DISABLED & UART_INT_RX_CHAR & UART_ADR_DETECT_DIS & UART_IrDA_POL_INV_ZERO)
 
 
-#define FEEDBACK_MSG  0xF1 
-#define SETTINGS_MSG  0xF2
-
-
-
+#define SETTINGS_MSG  		0xF0
+#define TOP1_FEEDBACK_MSG 	0xF1
+#define TOP2_FEEDBACK_MSG 	0xF2
+#define HTRV_FEEDBACK_MSG 	0xF3
+#define HTRI1_FEEDBACK_MSG 	0xF4
+#define HTRI2_FEEDBACK_MSG 	0xF5
 
 
 void InitializeA36613Serial(void);
 
-void A36613TransmitData(void); 
+void A36613TransmitData(int message_type); 
 void A36613ReceiveData(void); //ReceiveData is used by the Serial module once the RX message has been fully received. This functions checks CRC and if good, moves data from input buffer to global data structure.
 
 
