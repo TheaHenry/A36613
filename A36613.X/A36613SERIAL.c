@@ -8,7 +8,6 @@
 
 typedef struct
 {
-  //unsigned char command_byte;
   unsigned char top1_set_hi;
   unsigned char top1_set_lo;
   unsigned char top2_set_hi;
@@ -146,24 +145,25 @@ void A36613ReceiveData(void)
     if (read_byte == SETTINGS_MSG) 
     {
       read_byte = Buffer64ReadByte(&uart1_input_buffer);
-      if (read_byte == 0)
+      if (read_byte ==0)
       {
+      // All of the sync bytes matched, this should be a valid command
+      //A36613inputdata.clear = Buffer64ReadByte(&uart1_input_buffer);
+      A36613inputdata.top1_set_hi  = Buffer64ReadByte(&uart1_input_buffer);
+      A36613inputdata.top1_set_lo  = Buffer64ReadByte(&uart1_input_buffer);
+      A36613inputdata.top2_set_hi = Buffer64ReadByte(&uart1_input_buffer);
+      A36613inputdata.top2_set_lo = Buffer64ReadByte(&uart1_input_buffer);
+      A36613inputdata.heater_set_hi  = Buffer64ReadByte(&uart1_input_buffer);
+      A36613inputdata.heater_set_lo  = Buffer64ReadByte(&uart1_input_buffer);
+      A36613inputdata.heater_enable_hi  = Buffer64ReadByte(&uart1_input_buffer);
+      A36613inputdata.heater_enable_lo  = Buffer64ReadByte(&uart1_input_buffer);
+      crc = Buffer64ReadByte(&uart1_input_buffer);
+      crc = (crc << 8) + Buffer64ReadByte(&uart1_input_buffer);
+      if (crc == 0x5555)
+      {
+        A36613DownloadData();
+      }}
 
-          // All of the sync bytes matched, this should be a valid command
-          A36613inputdata.top1_set_hi  = Buffer64ReadByte(&uart1_input_buffer);
-          A36613inputdata.top1_set_lo  = Buffer64ReadByte(&uart1_input_buffer);
-          A36613inputdata.top2_set_hi = Buffer64ReadByte(&uart1_input_buffer);
-          A36613inputdata.top2_set_lo = Buffer64ReadByte(&uart1_input_buffer);
-          A36613inputdata.heater_set_hi  = Buffer64ReadByte(&uart1_input_buffer);
-          A36613inputdata.heater_set_lo  = Buffer64ReadByte(&uart1_input_buffer);
-          A36613inputdata.heater_enable_hi  = Buffer64ReadByte(&uart1_input_buffer);
-          A36613inputdata.heater_enable_lo  = Buffer64ReadByte(&uart1_input_buffer);
-          crc = Buffer64ReadByte(&uart1_input_buffer);
-          crc = (crc << 8) + Buffer64ReadByte(&uart1_input_buffer);
-          if (crc == 0x5555)
-          A36613DownloadData();
-        
-      }
     }
   }
 }
@@ -171,6 +171,7 @@ void A36613ReceiveData(void)
 
 void A36613DownloadData(void)
 {
+  
   global_data_A36613.top1_set_voltage = A36613inputdata.top1_set_hi;
   global_data_A36613.top1_set_voltage <<=8;
   global_data_A36613.top1_set_voltage = global_data_A36613.top1_set_voltage + A36613inputdata.top1_set_lo;

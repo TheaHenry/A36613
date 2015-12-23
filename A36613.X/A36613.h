@@ -81,15 +81,15 @@
    Period should be set to 10mS
 */
 #define T3CON_VALUE                    (T3_ON & T3_IDLE_CON & T3_GATE_OFF & T3_PS_1_8 & T3_SOURCE_INT)
-#define PR3_PERIOD_US                  10000   // 10mS
+#define PR3_PERIOD_US                  500   // 500uS
 #define PR3_VALUE_10_MILLISECONDS      (unsigned int)((FCY_CLK / 1000000)*PR3_PERIOD_US/8)
 
 
 //TMR1 Configuration 
-//Timer 1 used to trigger ADC conversion every 5us.
+//Timer 1 used to trigger ADC conversion every 10us.
 #define T1CON_VALUE                    (T1_ON & T1_IDLE_CON & T1_GATE_OFF & T1_PS_1_8 & T1_SOURCE_INT)
 #define PR1_PERIOD_US                  10   // 10uS
-#define PR1_VALUE_5_US      (unsigned int)((FCY_CLK / 1000000)*PR1_PERIOD_US/8)
+#define PR1_VALUE_10_US      (unsigned int)((FCY_CLK / 1000000)*PR1_PERIOD_US/8)
 
 
 // -------------------  PWM Configuration ----------------- //
@@ -117,10 +117,23 @@
 #define STATE_FAULT     0x30
 
 
-//---------------    Heater PID  ------------------------//
-#define Heater_Kp Q15(0.01)
-#define Heater_Ki Q15(0.0)
-#define Heater_Kd Q15(0)
+//---------------    Heater Settings  ------------------------//
+//#define Heater_Kp Q15(0.01)
+//#define Heater_Ki Q15(0.0)
+//#define Heater_Kd Q15(0)
+#define HEATER_VOLTAGE_SCALING_FACTOR MACRO_DEC_TO_SCALE_FACTOR_16(0.25177) //convert from feedback voltage on the pin to 1mV per bit
+#define HEATER_CURRENT_SCALING_FACTOR MACRO_DEC_TO_SCALE_FACTOR_16(0.062943) // convert from feedback current on the pin to 1mA per bit
+#define HEATER_OVERVOLTAGE_TRIP   8000 //8V
+#define HEATER_OVERCURRENT_TRIP   2500 //2.5A
+#define HEATER_UNDERVOLTAGE_TRIP  5000 //5V
+#define HEATER_UNDERCURRENT_TRIP  500 // 0.5A
+#define HEATER_MAX_CURRENT        2000 //2A
+
+#define HEATER_OVERVOLTAGE_FLT    0x01
+#define HEATER_OVERCURRENT_FLT    0x02
+#define HEATER_UNDERVOLTAGE_FLT   0x04
+#define HEATER_UNDERCURRENT_FLT   0x08
+
 
 
 typedef struct {
@@ -136,10 +149,8 @@ typedef struct {
   unsigned int heater1_current_monitor;
   unsigned int heater2_current_monitor;
   unsigned int bias_feedback;
-//  unsigned int top_feedback;
   unsigned int heater_enable;
   unsigned char status;
-
 } ControlData;
 
 extern ControlData global_data_A36613;
