@@ -114,7 +114,7 @@
 
 #define STATE_STARTUP   0x10
 #define STATE_READY     0x20
-#define STATE_FAULT     0x30
+#define STATE_WARMUP    0x30
 
 
 //---------------    Heater Settings  ------------------------//
@@ -128,6 +128,7 @@
 #define HEATER_UNDERVOLTAGE_TRIP  5000 //5V
 #define HEATER_UNDERCURRENT_TRIP  500 // 0.5A
 #define HEATER_MAX_CURRENT        2000 //2A
+#define HEATER_WARMUP_DURATION    360 // 180 seconds
 
 #define HEATER_OVERVOLTAGE_FLT    0x01
 #define HEATER_OVERCURRENT_FLT    0x02

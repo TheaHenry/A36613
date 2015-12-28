@@ -181,9 +181,23 @@ void A36613DownloadData(void)
   global_data_A36613.heater_set_voltage = A36613inputdata.heater_set_hi;
   global_data_A36613.heater_set_voltage <<=8;
   global_data_A36613.heater_set_voltage = global_data_A36613.heater_set_voltage + A36613inputdata.heater_set_lo;
-  global_data_A36613.heater_enable = A36613inputdata.heater_enable_hi;
-  global_data_A36613.heater_enable <<=8;
-  global_data_A36613.heater_enable = global_data_A36613.heater_enable + A36613inputdata.heater_enable_lo;
+  if (global_data_A36613.heater_enable == 0)
+  {
+    global_data_A36613.heater_enable = A36613inputdata.heater_enable_hi;
+    global_data_A36613.heater_enable <<=8;
+    global_data_A36613.heater_enable = global_data_A36613.heater_enable + A36613inputdata.heater_enable_lo;
+    if (global_data_A36613.heater_enable == 0xFFFF)
+    {
+      global_data_A36613.control_state = STATE_WARMUP;
+    }
+  }
+  else
+  {
+    global_data_A36613.heater_enable = A36613inputdata.heater_enable_hi;
+    global_data_A36613.heater_enable <<=8;
+    global_data_A36613.heater_enable = global_data_A36613.heater_enable + A36613inputdata.heater_enable_lo;
+  }
+
 }
 
 

@@ -86,6 +86,8 @@ unsigned int heater_overvoltage_count;
 unsigned int heater_undervoltage_count;
 unsigned int heater_overcurrent_count;
 unsigned int heater_undercurrent_count;
+unsigned int transmit_message;
+unsigned int flashDuration;
 
 ControlData global_data_A36613;
 LTC265X U4_LTC2654;
@@ -119,8 +121,9 @@ void DoStateMachine(void) {
 
     PIN_LED_OPERATIONAL_GREEN = 1;
     PIN_LED_TEST_POINT_A = 1;
-    unsigned int transmit_message=0xF0;
-    unsigned int flashDuration = 1000;
+    PIN_LED_TEST_POINT_B = 0;
+    transmit_message=0xF0;
+    flashDuration = 1000;
     while(global_data_A36613.control_state == STATE_READY)
     {
         A36613ReceiveData();
@@ -138,11 +141,13 @@ void DoStateMachine(void) {
           {
             _PTEN = 1; // Turn PWM on
             UpdateHeaterPWM();
+
           }
           else
           {
             _PTEN = 0; // Turn PWM off
           }
+          CheckHeaterFaults();
         }
 
 
@@ -161,17 +166,64 @@ void DoStateMachine(void) {
             }
         
         }
-
-      
-
- 
         
     }
     break;
      
     
- case STATE_FAULT:
-     
+ case STATE_WARMUP:
+    PIN_LED_OPERATIONAL_GREEN = 1;
+    PIN_LED_TEST_POINT_B = 1;
+    PIN_LED_TEST_POINT_A = 0;
+    transmit_message=0xF0;
+    flashDuration = 1000;
+    unsigned int heater_warmup_counter = 0;
+    while(global_data_A36613.control_state == STATE_WARMUP)
+    {
+        A36613ReceiveData();
+        if (_T3IF ) //every 500us
+        { 
+          _T3IF = 0;
+          flashDuration--;
+          
+          if (transmit_message > 0xF5)
+          {
+            transmit_message = 0xF1;
+          }
+          A36613TransmitData(transmit_message);
+          transmit_message++;
+          if (global_data_A36613.heater_enable == 0xFFFF)
+          {
+            _PTEN = 1; // Turn PWM on
+            UpdateHeaterPWM();
+          }
+          else
+          {
+            _PTEN = 0; // Turn PWM off
+          }
+          CheckHeaterFaults();
+        }
+
+        if (flashDuration ==0) //every 500ms
+        {
+          flashDuration = 1000;
+          heater_warmup_counter++;
+            UpdateTopVoltage(); // to do :change this timing to match receiving (1ms)
+            if(PIN_LED_OPERATIONAL_GREEN==1) //LED turns on once a second
+            {
+              PIN_LED_OPERATIONAL_GREEN=0;
+            }
+            else
+            {
+              PIN_LED_OPERATIONAL_GREEN=1;
+            }
+        }
+
+        if (heater_warmup_counter == HEATER_WARMUP_DURATION)
+        {
+          global_data_A36613.control_state = STATE_READY;
+        }
+    }
 	break;
 	
   default:
@@ -260,7 +312,7 @@ void InitializeA36613(void)
   global_data_A36613.heater2_current_monitor = 0x0000;
   global_data_A36613.bias_feedback = 0x0000;
   global_data_A36613.status = 0;
-  global_data_A36613.heater_enable = 0xFFFF;
+  global_data_A36613.heater_enable = 0;
   PIN_LED_OPERATIONAL_GREEN = 0;
 
   //set tris
@@ -344,7 +396,11 @@ void InitializeA36613(void)
 void UpdateHeaterPWM(void)
 {
   unsigned int Heater_error;
-  if (global_data_A36613.heater_output_voltage > global_data_A36613.heater_set_voltage)
+  if ((global_data_A36613.heater1_current_monitor >= HEATER_MAX_CURRENT)|| (global_data_A36613.heater2_current_monitor >= HEATER_MAX_CURRENT))
+  {
+    MDC-=HEATER_SMALL_STEP;
+  }
+  else if (global_data_A36613.heater_output_voltage > global_data_A36613.heater_set_voltage)
   {
       Heater_error = global_data_A36613.heater_output_voltage - global_data_A36613.heater_set_voltage;
       if (Heater_error > 100)
@@ -355,6 +411,10 @@ void UpdateHeaterPWM(void)
       {
         MDC-= HEATER_LARGE_STEP;
       }
+      if (Heater_error < 100)
+      {
+        global_data_A36613.control_state = STATE_READY;
+      } 
       
   }
   else if (global_data_A36613.heater_output_voltage < global_data_A36613.heater_set_voltage)
@@ -368,7 +428,10 @@ void UpdateHeaterPWM(void)
       {
         MDC+= HEATER_LARGE_STEP;
       }
-      
+      if (Heater_error < 100)
+      {
+        global_data_A36613.control_state = STATE_READY;
+      }      
   } 
 
   if (MDC <= 64)
@@ -402,7 +465,7 @@ void CheckHeaterFaults(void) //need 3 succesive fault conditions in order to tri
   }
   if (heater_overvoltage_count >=3)
   {
-    global_data_A36613.status &= HEATER_OVERVOLTAGE_FLT;
+    global_data_A36613.status |= HEATER_OVERVOLTAGE_FLT;
   }
 
   if ((global_data_A36613.heater1_current_monitor > HEATER_OVERCURRENT_TRIP) || (global_data_A36613.heater2_current_monitor > HEATER_OVERCURRENT_TRIP)) //Over current condition
@@ -415,35 +478,41 @@ void CheckHeaterFaults(void) //need 3 succesive fault conditions in order to tri
   }
   if (heater_overcurrent_count >=3)
   {
-    global_data_A36613.status &= HEATER_OVERCURRENT_FLT;
+    global_data_A36613.status |= HEATER_OVERCURRENT_FLT;
   }
 
-  if ((global_data_A36613.heater1_current_monitor < HEATER_UNDERCURRENT_TRIP) || (global_data_A36613.heater2_current_monitor < HEATER_UNDERCURRENT_TRIP)) //Under current condition
+  if (global_data_A36613.heater_enable == 0xFFFF)// heater undervoltage and under current should only be chaecked if heater is on.
   {
-      heater_undercurrent_count++;
-  }
-  else
-  {
-    heater_undercurrent_count = 0;
-  }
+    if ((global_data_A36613.heater1_current_monitor < HEATER_UNDERCURRENT_TRIP) || (global_data_A36613.heater2_current_monitor < HEATER_UNDERCURRENT_TRIP)) //Under current condition
+    {
+        heater_undercurrent_count++;
+    }
+    else
+    {
+      heater_undercurrent_count = 0;
+    }
+  
   if (heater_undercurrent_count >=3)
   {
-    global_data_A36613.status &= HEATER_UNDERCURRENT_FLT;
+    global_data_A36613.status |= HEATER_UNDERCURRENT_FLT;
   }
 
-  if (global_data_A36613.heater_output_voltage < HEATER_UNDERVOLTAGE_TRIP) //Under voltage condition
+  if (global_data_A36613.control_state == STATE_READY) // Check for heater undervoltage only after warmup.
   {
+    if (global_data_A36613.heater_output_voltage < HEATER_UNDERVOLTAGE_TRIP) //Under voltage condition
+    {
       heater_undervoltage_count++;
-  }
-  else
-  {
-    heater_undervoltage_count = 0;
+    }
+    else
+    {
+      heater_undervoltage_count = 0;
+    }
   }
   if (heater_undervoltage_count >=3)
   {
-    global_data_A36613.status &= HEATER_UNDERVOLTAGE_FLT;
+    global_data_A36613.status |= HEATER_UNDERVOLTAGE_FLT;
   }
-
+}
 }
 
 
