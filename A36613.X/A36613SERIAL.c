@@ -8,14 +8,14 @@
 
 typedef struct
 {
+  unsigned char status;
   unsigned char top1_set_hi;
   unsigned char top1_set_lo;
   unsigned char top2_set_hi;
   unsigned char top2_set_lo;
   unsigned char heater_set_hi;
   unsigned char heater_set_lo;
-  unsigned char heater_enable_hi;
-  unsigned char heater_enable_lo;
+
 }InputData;
 
 InputData A36613inputdata;
@@ -24,7 +24,7 @@ InputData A36613inputdata;
 // possible commands (application specific):
 
 
-#define COMMAND_LENGTH 12
+#define COMMAND_LENGTH 10
 #define A36613_SERIAL_UART_BRG_VALUE   (unsigned int)(((FCY_CLK/A36613_SERIAL_BAUDRATE)/16)-1)
 
 #define SERIAL_UART_INT_PRI 5
@@ -134,7 +134,7 @@ void A36613TransmitData(int message_type)
   }
 };
 
-void A36613ReceiveData(void)
+int A36613ReceiveData(void)
 {
 
   while ( (Buffer64BytesInBuffer(&uart1_input_buffer) >= COMMAND_LENGTH)) {
@@ -144,34 +144,32 @@ void A36613ReceiveData(void)
     read_byte = Buffer64ReadByte(&uart1_input_buffer);
     if (read_byte == SETTINGS_MSG) 
     {
-      read_byte = Buffer64ReadByte(&uart1_input_buffer);
-      if (read_byte ==0)
-      {
       // All of the sync bytes matched, this should be a valid command
-      //A36613inputdata.clear = Buffer64ReadByte(&uart1_input_buffer);
+      A36613inputdata.status = Buffer64ReadByte(&uart1_input_buffer);
       A36613inputdata.top1_set_hi  = Buffer64ReadByte(&uart1_input_buffer);
       A36613inputdata.top1_set_lo  = Buffer64ReadByte(&uart1_input_buffer);
       A36613inputdata.top2_set_hi = Buffer64ReadByte(&uart1_input_buffer);
       A36613inputdata.top2_set_lo = Buffer64ReadByte(&uart1_input_buffer);
       A36613inputdata.heater_set_hi  = Buffer64ReadByte(&uart1_input_buffer);
       A36613inputdata.heater_set_lo  = Buffer64ReadByte(&uart1_input_buffer);
-      A36613inputdata.heater_enable_hi  = Buffer64ReadByte(&uart1_input_buffer);
-      A36613inputdata.heater_enable_lo  = Buffer64ReadByte(&uart1_input_buffer);
       crc = Buffer64ReadByte(&uart1_input_buffer);
       crc = (crc << 8) + Buffer64ReadByte(&uart1_input_buffer);
       if (crc == 0x5555)
       {
         A36613DownloadData();
-      }}
+        return 1;
+      }
 
     }
   }
+  return 0;
 }
     
 
 void A36613DownloadData(void)
 {
-  
+
+  global_data_A36613.status = A36613inputdata.status;
   global_data_A36613.top1_set_voltage = A36613inputdata.top1_set_hi;
   global_data_A36613.top1_set_voltage <<=8;
   global_data_A36613.top1_set_voltage = global_data_A36613.top1_set_voltage + A36613inputdata.top1_set_lo;
@@ -181,22 +179,6 @@ void A36613DownloadData(void)
   global_data_A36613.heater_set_voltage = A36613inputdata.heater_set_hi;
   global_data_A36613.heater_set_voltage <<=8;
   global_data_A36613.heater_set_voltage = global_data_A36613.heater_set_voltage + A36613inputdata.heater_set_lo;
-  if (global_data_A36613.heater_enable == 0)
-  {
-    global_data_A36613.heater_enable = A36613inputdata.heater_enable_hi;
-    global_data_A36613.heater_enable <<=8;
-    global_data_A36613.heater_enable = global_data_A36613.heater_enable + A36613inputdata.heater_enable_lo;
-    if (global_data_A36613.heater_enable == 0xFFFF)
-    {
-      global_data_A36613.control_state = STATE_WARMUP;
-    }
-  }
-  else
-  {
-    global_data_A36613.heater_enable = A36613inputdata.heater_enable_hi;
-    global_data_A36613.heater_enable <<=8;
-    global_data_A36613.heater_enable = global_data_A36613.heater_enable + A36613inputdata.heater_enable_lo;
-  }
 
 }
 

@@ -8,7 +8,6 @@
  *bootloader
 
 	Other open items:
-	* how do we want to respond to HTR faults?.
 	* CRC?
 	* watchdog?
   * UpdateTopVoltage(); // change this to be done every 1 sec? Perhaps call it when successfully receiving a message.
@@ -67,6 +66,7 @@ void UpdateTopVoltage(void);
 void UpdateHeaterPWM(void);
 void ConfigureClock(void);
 void CheckHeaterFaults(void);
+void ResetHeater(void);
 
 unsigned int heater_output_voltage_accumulator;
 unsigned int heater_voltage_accumulator_size;
@@ -88,6 +88,7 @@ unsigned int heater_overcurrent_count;
 unsigned int heater_undercurrent_count;
 unsigned int transmit_message;
 unsigned int flashDuration;
+unsigned int heater_reset_counter;
 
 ControlData global_data_A36613;
 LTC265X U4_LTC2654;
@@ -107,129 +108,158 @@ int main(void) {
   }
 }
 
-void DoStateMachine(void) {
+void DoStateMachine(void) 
+{
   switch (global_data_A36613.control_state) {
 
   case STATE_STARTUP:
     InitializeA36613();
-    global_data_A36613.control_state = STATE_READY;
-
-    break;
+    global_data_A36613.control_state = STATE_WARMUP;
+    while(!A36613ReceiveData());
+  break;
 	
-
-  case STATE_READY:
-
-    PIN_LED_OPERATIONAL_GREEN = 1;
-    PIN_LED_TEST_POINT_A = 1;
-    PIN_LED_TEST_POINT_B = 0;
-    transmit_message=0xF0;
-    flashDuration = 1000;
-    while(global_data_A36613.control_state == STATE_READY)
-    {
-        A36613ReceiveData();
-        if (_T3IF ) //every 500us
-        { 
-          _T3IF = 0;
-          flashDuration--;
-          if (transmit_message > 0xF5)
-          {
-            transmit_message = 0xF1;
-          }
-          A36613TransmitData(transmit_message);
-          transmit_message++;
-          if (global_data_A36613.heater_enable == 0xFFFF)
-          {
-            _PTEN = 1; // Turn PWM on
-            UpdateHeaterPWM();
-
-          }
-          else
-          {
-            _PTEN = 0; // Turn PWM off
-          }
-          CheckHeaterFaults();
-        }
-
-
-
-        if (flashDuration ==0) //every 500ms
-        {
-          flashDuration = 1000;
-            UpdateTopVoltage(); // to do :change this timing to match receiving (1ms)
-            if(PIN_LED_OPERATIONAL_GREEN==1) //LED turns on once a second
-            {
-              PIN_LED_OPERATIONAL_GREEN=0;
-            }
-            else
-            {
-              PIN_LED_OPERATIONAL_GREEN=1;
-            }
-        
-        }
-        
-    }
-    break;
-     
-    
- case STATE_WARMUP:
+  case STATE_WARMUP:
     PIN_LED_OPERATIONAL_GREEN = 1;
     PIN_LED_TEST_POINT_B = 1;
     PIN_LED_TEST_POINT_A = 0;
     transmit_message=0xF0;
     flashDuration = 1000;
     unsigned int heater_warmup_counter = 0;
+
     while(global_data_A36613.control_state == STATE_WARMUP)
     {
-        A36613ReceiveData();
-        if (_T3IF ) //every 500us
-        { 
-          _T3IF = 0;
-          flashDuration--;
+      _PTEN =1; //Turn heater on
+      A36613ReceiveData();
+      if (_T3IF ) //every 500us
+      { 
+        _T3IF = 0;
+        flashDuration--;
           
-          if (transmit_message > 0xF5)
-          {
-            transmit_message = 0xF1;
-          }
-          A36613TransmitData(transmit_message);
-          transmit_message++;
-          if (global_data_A36613.heater_enable == 0xFFFF)
-          {
-            _PTEN = 1; // Turn PWM on
-            UpdateHeaterPWM();
-          }
-          else
-          {
-            _PTEN = 0; // Turn PWM off
-          }
-          CheckHeaterFaults();
-        }
-
-        if (flashDuration ==0) //every 500ms
+        if (transmit_message > 0xF5)
         {
-          flashDuration = 1000;
-          heater_warmup_counter++;
-            UpdateTopVoltage(); // to do :change this timing to match receiving (1ms)
-            if(PIN_LED_OPERATIONAL_GREEN==1) //LED turns on once a second
-            {
-              PIN_LED_OPERATIONAL_GREEN=0;
-            }
-            else
-            {
-              PIN_LED_OPERATIONAL_GREEN=1;
-            }
+          transmit_message = 0xF1;
         }
+        A36613TransmitData(transmit_message);
+        transmit_message++;
+        UpdateHeaterPWM();
+        CheckHeaterFaults();
+      }
 
-        if (heater_warmup_counter == HEATER_WARMUP_DURATION)
+      if (flashDuration ==0) //every 500ms
+      {
+        flashDuration = 1000;
+        heater_warmup_counter++;
+        UpdateTopVoltage(); // to do :change this timing to match receiving (1ms)
+        if(PIN_LED_OPERATIONAL_GREEN==1) //LED turns on once a second
         {
-          global_data_A36613.control_state = STATE_READY;
+          PIN_LED_OPERATIONAL_GREEN=0;
         }
+        else
+        {
+          PIN_LED_OPERATIONAL_GREEN=1;
+        }
+      }
+
+      if (heater_warmup_counter >= HEATER_WARMUP_DURATION)
+      {
+        global_data_A36613.control_state = STATE_READY;
+      }
+      if (global_data_A36613.status & 0x80 ) // clear heater faults.
+      {
+        global_data_A36613.status &= 0x00;
+      }
+
     }
-	break;
+  break;
+
+  case STATE_READY:
+    PIN_LED_OPERATIONAL_GREEN = 1;
+    PIN_LED_TEST_POINT_A = 1;
+    PIN_LED_TEST_POINT_B = 0;
+    transmit_message=0xF0;
+    flashDuration = 1000;
+    global_data_A36613.status &= 0xEF; //heater is ready.
+    while(global_data_A36613.control_state == STATE_READY)
+    {
+      A36613ReceiveData();
+      if (_T3IF ) //every 500us
+      { 
+        _T3IF = 0;
+        flashDuration--;
+        if (transmit_message > 0xF5)
+        {
+          transmit_message = 0xF1;
+        }
+        A36613TransmitData(transmit_message);
+        transmit_message++;
+        UpdateHeaterPWM();
+        CheckHeaterFaults();
+      }
+
+      if (flashDuration ==0) //every 500ms
+      {
+        flashDuration = 1000;
+        UpdateTopVoltage(); // to do :change this timing to match receiving (1ms)
+        if(PIN_LED_OPERATIONAL_GREEN==1) //LED turns on once a second
+        {
+          PIN_LED_OPERATIONAL_GREEN=0;
+        }
+        else
+        {
+          PIN_LED_OPERATIONAL_GREEN=1;
+        }  
+      }
+
+      if (global_data_A36613.status & 0x0080) // clear heater faults.
+      {
+        global_data_A36613.status &= 0x00;
+      }
+    }
+  break;
+ 
+
+  case STATE_FAULT:
+    PIN_LED_OPERATIONAL_GREEN = 1;
+    PIN_LED_TEST_POINT_B = 1;
+    PIN_LED_TEST_POINT_A = 1;
+    transmit_message=0xF0;
+    flashDuration = 1000;
+    while(global_data_A36613.control_state == STATE_FAULT)
+    {
+      A36613ReceiveData();
+      if (_T3IF ) //every 500us
+      { 
+        _T3IF = 0;
+        flashDuration--;
+          
+        if (transmit_message > 0xF5)
+        {
+          transmit_message = 0xF1;
+        }
+        A36613TransmitData(transmit_message);
+        transmit_message++;
+      }
+
+      if (flashDuration ==0) //every 500ms
+      {
+        flashDuration = 1000;
+        UpdateTopVoltage(); // to do :change this timing to match receiving (1ms)
+        if(PIN_LED_OPERATIONAL_GREEN==1) //LED turns on once a second
+        {
+          PIN_LED_OPERATIONAL_GREEN=0;
+        }
+        else
+        {
+          PIN_LED_OPERATIONAL_GREEN=1;
+        }
+      }        
+    }
+  break;
 	
   default:
-    global_data_A36613.control_state = STATE_READY;
+    global_data_A36613.control_state = STATE_WARMUP;
 
-    break;
+  break;
 
   }
 }
@@ -311,8 +341,7 @@ void InitializeA36613(void)
   global_data_A36613.heater1_current_monitor = 0x0000;
   global_data_A36613.heater2_current_monitor = 0x0000;
   global_data_A36613.bias_feedback = 0x0000;
-  global_data_A36613.status = 0;
-  global_data_A36613.heater_enable = 0;
+  global_data_A36613.status = 0x80;
   PIN_LED_OPERATIONAL_GREEN = 0;
 
   //set tris
@@ -383,6 +412,7 @@ void InitializeA36613(void)
   heater2_current_accumulator_size = 64;
   bias_feedback_accumulator = 0;
   heater1_current_monitor_accumulator = 0;
+  heater_reset_counter = 0;
   
 
   _ADON = 1; //Turn ADC on
@@ -390,7 +420,7 @@ void InitializeA36613(void)
 }
 
 #define HEATER_SMALL_STEP   0x0001
-#define HEATER_LARGE_STEP   0x000C
+#define HEATER_LARGE_STEP   0x0009
 #define HEATER_MAX_DUTY     (PWM_PERIOD * 0.7)
 
 void UpdateHeaterPWM(void)
@@ -411,10 +441,10 @@ void UpdateHeaterPWM(void)
       {
         MDC-= HEATER_LARGE_STEP;
       }
-      if (Heater_error < 100)
+      /*if (Heater_error < 100)
       {
         global_data_A36613.control_state = STATE_READY;
-      } 
+      } */
       
   }
   else if (global_data_A36613.heater_output_voltage < global_data_A36613.heater_set_voltage)
@@ -463,9 +493,11 @@ void CheckHeaterFaults(void) //need 3 succesive fault conditions in order to tri
   {
     heater_overvoltage_count = 0;
   }
-  if (heater_overvoltage_count >=3)
+  if (heater_overvoltage_count >=10)
   {
     global_data_A36613.status |= HEATER_OVERVOLTAGE_FLT;
+    heater_reset_counter++;
+    ResetHeater();
   }
 
   if ((global_data_A36613.heater1_current_monitor > HEATER_OVERCURRENT_TRIP) || (global_data_A36613.heater2_current_monitor > HEATER_OVERCURRENT_TRIP)) //Over current condition
@@ -476,12 +508,14 @@ void CheckHeaterFaults(void) //need 3 succesive fault conditions in order to tri
   {
     heater_overcurrent_count = 0;
   }
-  if (heater_overcurrent_count >=3)
+  if (heater_overcurrent_count >=10)
   {
     global_data_A36613.status |= HEATER_OVERCURRENT_FLT;
+    heater_reset_counter++;
+    ResetHeater();
   }
 
-  if (global_data_A36613.heater_enable == 0xFFFF)// heater undervoltage and under current should only be chaecked if heater is on.
+  if (global_data_A36613.control_state == STATE_READY)// heater undervoltage and under current should only be checked after warmup.
   {
     if ((global_data_A36613.heater1_current_monitor < HEATER_UNDERCURRENT_TRIP) || (global_data_A36613.heater2_current_monitor < HEATER_UNDERCURRENT_TRIP)) //Under current condition
     {
@@ -492,13 +526,14 @@ void CheckHeaterFaults(void) //need 3 succesive fault conditions in order to tri
       heater_undercurrent_count = 0;
     }
   
-  if (heater_undercurrent_count >=3)
+  if (heater_undercurrent_count >=30)
   {
     global_data_A36613.status |= HEATER_UNDERCURRENT_FLT;
+ //   heater_reset_counter++;
+ //   ResetHeater();
   }
 
-  if (global_data_A36613.control_state == STATE_READY) // Check for heater undervoltage only after warmup.
-  {
+
     if (global_data_A36613.heater_output_voltage < HEATER_UNDERVOLTAGE_TRIP) //Under voltage condition
     {
       heater_undervoltage_count++;
@@ -507,14 +542,33 @@ void CheckHeaterFaults(void) //need 3 succesive fault conditions in order to tri
     {
       heater_undervoltage_count = 0;
     }
-  }
-  if (heater_undervoltage_count >=3)
+  
+  if (heater_undervoltage_count >=30)
   {
     global_data_A36613.status |= HEATER_UNDERVOLTAGE_FLT;
+    heater_reset_counter++;
+    ResetHeater();
   }
 }
 }
 
+
+void ResetHeater(void)
+{
+  _PTEN = 0;
+  if(heater_reset_counter>=3)
+  { 
+    global_data_A36613.status |=0x10; //heater not ready
+    global_data_A36613.control_state = STATE_FAULT;
+
+  }
+  else
+  {
+    global_data_A36613.control_state= STATE_WARMUP;  
+  }
+  
+
+}
 
 
 void __attribute__((interrupt, auto_psv)) _ADCP0Interrupt(void)

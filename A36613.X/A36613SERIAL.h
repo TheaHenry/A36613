@@ -43,7 +43,7 @@
 void InitializeA36613Serial(void);
 
 void A36613TransmitData(int message_type); 
-void A36613ReceiveData(void); //ReceiveData is used by the Serial module once the RX message has been fully received. This functions checks CRC and if good, moves data from input buffer to global data structure.
+int A36613ReceiveData(void); //returns 1 if the RX message has been fully received. This functions checks CRC and if good, moves data from input buffer to global data structure.
 
 
 #endif

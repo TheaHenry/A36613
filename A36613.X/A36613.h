@@ -99,7 +99,7 @@
 #define PWM_PERIOD          1350// (1/(PWM_FREQUENCY_KHZ*1000)*(10^9/1.04)*(1/PWM_PRESCALER)
 #define PWM_PRESCALER       2
 #define INITIAL_PWM_DC_PERCENT      33
-#define INITIAL_PWM_DC      500//  ((INITIAL_PWM_DC_PERCENT/100)*PWM_PERIOD)
+#define INITIAL_PWM_DC      200//  ((INITIAL_PWM_DC_PERCENT/100)*PWM_PERIOD)
 
 
 
@@ -113,8 +113,9 @@
 #define ADCPC2_SETTING          (ADC_AN11_10_IR_GEN_EN | ADC_AN11_10_TRIG_TMR1 | ADC_AN9_8_IR_GEN_EN | ADC_AN9_8_TRIG_TMR1)
 
 #define STATE_STARTUP   0x10
-#define STATE_READY     0x20
-#define STATE_WARMUP    0x30
+#define STATE_WARMUP    0x20
+#define STATE_READY     0x30
+#define STATE_FAULT     0x40  
 
 
 //---------------    Heater Settings  ------------------------//
@@ -123,7 +124,7 @@
 //#define Heater_Kd Q15(0)
 #define HEATER_VOLTAGE_SCALING_FACTOR MACRO_DEC_TO_SCALE_FACTOR_16(0.25177) //convert from feedback voltage on the pin to 1mV per bit
 #define HEATER_CURRENT_SCALING_FACTOR MACRO_DEC_TO_SCALE_FACTOR_16(0.062943) // convert from feedback current on the pin to 1mA per bit
-#define HEATER_OVERVOLTAGE_TRIP   8000 //8V
+#define HEATER_OVERVOLTAGE_TRIP   10000 //10V
 #define HEATER_OVERCURRENT_TRIP   2500 //2.5A
 #define HEATER_UNDERVOLTAGE_TRIP  5000 //5V
 #define HEATER_UNDERCURRENT_TRIP  500 // 0.5A
@@ -150,7 +151,6 @@ typedef struct {
   unsigned int heater1_current_monitor;
   unsigned int heater2_current_monitor;
   unsigned int bias_feedback;
-  unsigned int heater_enable;
   unsigned char status;
 } ControlData;
 
