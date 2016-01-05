@@ -13,7 +13,7 @@
 
 #include "ETM.h"
 #include "A36613SERIAL.h"
-#include "Buffer64.h"
+
 
 /*
   
@@ -129,34 +129,30 @@
 #define HEATER_UNDERVOLTAGE_TRIP  5000 //5V
 #define HEATER_UNDERCURRENT_TRIP  500 // 0.5A
 #define HEATER_MAX_CURRENT        2000 //2A
-#define HEATER_WARMUP_DURATION    360 // 180 seconds
+#define HEATER_WARMUP_DURATION    20 // 10 seconds
+#define ABSOLUTE_TRIP_COUNTER  100
 
 #define HEATER_OVERVOLTAGE_FLT    0x01
-#define HEATER_OVERCURRENT_FLT    0x02
-#define HEATER_UNDERVOLTAGE_FLT   0x04
+#define HEATER_UNDERVOLTAGE_FLT    0x02
+#define HEATER_OVERCURRENT_FLT   0x04
 #define HEATER_UNDERCURRENT_FLT   0x08
+#define HEATER_NOT_READY          0x10
 
 
 
 typedef struct {
   unsigned int control_state;
   unsigned int heater_set_voltage;
-  unsigned int heater_output_voltage;
   unsigned int top1_set_voltage;
   unsigned int top2_set_voltage;
   unsigned int top1_voltage_monitor; 
   unsigned int top2_voltage_monitor;
   unsigned int top1_voltage_feedback;
   unsigned int top2_voltage_feedback;
-  unsigned int heater1_current_monitor;
-  unsigned int heater2_current_monitor;
   unsigned int bias_feedback;
   unsigned char status;
 } ControlData;
 
-extern ControlData global_data_A36613;
-extern BUFFER64BYTE uart1_input_buffer;
-extern BUFFER64BYTE uart1_output_buffer;
 
 
 #endif

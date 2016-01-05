@@ -48,6 +48,7 @@
             <linkerLibFileItem>../../91-36994/Version_ZZZ/lib/33F/ETM_CORE.X_33fj64gs606.a</linkerLibFileItem>
             <linkerLibFileItem>../../../../../../Program Files (x86)/Microchip/xc16/v1.24/lib/libdsp-elf.a</linkerLibFileItem>
             <linkerLibFileItem>../../../../../../Program Files (x86)/Microchip/xc16/v1.24/lib/libq-dsp-elf.a</linkerLibFileItem>
+            <linkerLibFileItem>../../91-36994/Version_ZZZ/lib/33F/ETM_NO_EEPROM.X.a</linkerLibFileItem>
           </linkerLibItems>
         </linkerTool>
         <archiverTool>

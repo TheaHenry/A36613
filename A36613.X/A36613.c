@@ -68,36 +68,37 @@ void ConfigureClock(void);
 void CheckHeaterFaults(void);
 void ResetHeater(void);
 
-unsigned int heater_output_voltage_accumulator;
-unsigned int heater_voltage_accumulator_size;
+
 unsigned int top1_voltage_monitor_accumulator;
 unsigned int top1_voltage_accumulator_size;
 unsigned int top2_voltage_monitor_accumulator;
-unsigned int top2_voltage_accumulator_size;
 unsigned int top1_voltage_feedback_accumulator;
 unsigned int top1_fdbk_voltage_accumulator_size;
 unsigned int top2_voltage_feedback_accumulator;
 unsigned int top2_fdbk_voltage_accumulator_size;
-unsigned int heater1_current_monitor_accumulator;
-unsigned int heater2_current_monitor_accumulator;
-unsigned int heater2_current_accumulator_size;
+
 unsigned int bias_feedback_accumulator;
-unsigned int heater_overvoltage_count;
-unsigned int heater_undervoltage_count;
-unsigned int heater_overcurrent_count;
-unsigned int heater_undercurrent_count;
+
 unsigned int transmit_message;
 unsigned int flashDuration;
 unsigned int heater_reset_counter;
 
+#define ACCUMULATOR_SIZE  64 
+
 ControlData global_data_A36613;
 LTC265X U4_LTC2654;
+AnalogInput Heater_output_voltage;
+AnalogInput Heater1_current;
+AnalogInput Heater2_current;
+
+
 /*
 tPID Heater_PID;                                                      // Declare a PID Data Structure named, Heater_PID                                            
      fractional abcCoefficient[3]__attribute__((space(xmemory)));  // find a place to put the data, use 
      fractional controlHistory[3]__attribute__((space(ymemory)));  // large data model in project build options 
      fractional kCoeffs[] = {Heater_Kp,Heater_Ki,Heater_Kd};        // declare Kp, Ki and Kd    
 */
+
 int main(void) {
 
   ConfigureClock();
@@ -167,6 +168,7 @@ void DoStateMachine(void)
       if (global_data_A36613.status & 0x80 ) // clear heater faults.
       {
         global_data_A36613.status &= 0x00;
+        heater_reset_counter = 0;
       }
 
     }
@@ -178,6 +180,7 @@ void DoStateMachine(void)
     PIN_LED_TEST_POINT_B = 0;
     transmit_message=0xF0;
     flashDuration = 1000;
+      _PTEN = 1;
     global_data_A36613.status &= 0xEF; //heater is ready.
     while(global_data_A36613.control_state == STATE_READY)
     {
@@ -213,6 +216,7 @@ void DoStateMachine(void)
       if (global_data_A36613.status & 0x0080) // clear heater faults.
       {
         global_data_A36613.status &= 0x00;
+        heater_reset_counter = 0;
       }
     }
   break;
@@ -224,8 +228,10 @@ void DoStateMachine(void)
     PIN_LED_TEST_POINT_A = 1;
     transmit_message=0xF0;
     flashDuration = 1000;
+
     while(global_data_A36613.control_state == STATE_FAULT)
     {
+      global_data_A36613.status |= HEATER_NOT_READY;
       A36613ReceiveData();
       if (_T3IF ) //every 500us
       { 
@@ -331,15 +337,12 @@ void InitializeA36613(void)
 
   //init global variables
   global_data_A36613.heater_set_voltage = 0x0000;
-  global_data_A36613.heater_output_voltage = 0x0000;
   global_data_A36613.top1_set_voltage = 0; //2V from DAC
   global_data_A36613.top2_set_voltage = 0; //2V from DAC
   global_data_A36613.top1_voltage_monitor = 0x0000;
   global_data_A36613.top2_voltage_monitor = 0x0000;
   global_data_A36613.top1_voltage_feedback = 0;
   global_data_A36613.top2_voltage_feedback = 0;
-  global_data_A36613.heater1_current_monitor = 0x0000;
-  global_data_A36613.heater2_current_monitor = 0x0000;
   global_data_A36613.bias_feedback = 0x0000;
   global_data_A36613.status = 0x80;
   PIN_LED_OPERATIONAL_GREEN = 0;
@@ -362,7 +365,44 @@ void InitializeA36613(void)
   //PIDCoeffCalc( &kCoeffs[0], &Heater_PID);
   //PIDInit( &Heater_PID);
 
+
+  ETMAnalogInitializeInput(&Heater_output_voltage,
+            HEATER_VOLTAGE_SCALING_FACTOR,
+            OFFSET_ZERO,
+            ANALOG_INPUT_NO_CALIBRATION,
+            HEATER_OVERVOLTAGE_TRIP,
+            HEATER_UNDERVOLTAGE_TRIP,
+            NO_TRIP_SCALE,
+            NO_FLOOR,
+            NO_RELATIVE_COUNTER,
+            ABSOLUTE_TRIP_COUNTER);
+
+
+  ETMAnalogInitializeInput(&Heater1_current,
+            HEATER_CURRENT_SCALING_FACTOR,
+            OFFSET_ZERO,
+            ANALOG_INPUT_NO_CALIBRATION,
+            HEATER_OVERCURRENT_TRIP,
+            HEATER_UNDERCURRENT_TRIP,
+            NO_TRIP_SCALE,
+            NO_FLOOR,
+            NO_RELATIVE_COUNTER,
+            ABSOLUTE_TRIP_COUNTER);  
+
+  ETMAnalogInitializeInput(&Heater2_current,
+            HEATER_CURRENT_SCALING_FACTOR,
+            OFFSET_ZERO,
+            ANALOG_INPUT_NO_CALIBRATION,
+            HEATER_OVERCURRENT_TRIP,
+            HEATER_UNDERCURRENT_TRIP,
+            NO_TRIP_SCALE,
+            NO_FLOOR,
+            NO_RELATIVE_COUNTER,
+            ABSOLUTE_TRIP_COUNTER);  
+
+
   SetupLTC265X(&U4_LTC2654, ETM_SPI_PORT_2, FCY_CLK, LTC265X_SPI_2_5_M_BIT, _PIN_RE6, _PIN_RE7);
+
 
   InitializeA36613Serial();
 
@@ -394,24 +434,16 @@ void InitializeA36613(void)
   _ADCP4IP = 2;
   _ADCP5IP = 2;
 
-  heater_overvoltage_count = 0;
-  heater_undervoltage_count = 0;
-  heater_overcurrent_count = 0;
-  heater_undercurrent_count = 0;
-  heater_output_voltage_accumulator = 0;
-  heater_voltage_accumulator_size = 64;
+
   top1_voltage_monitor_accumulator = 0;
-  top1_voltage_accumulator_size = 64;
+  top1_voltage_accumulator_size = 0;
   top2_voltage_monitor_accumulator = 0;
-  top2_voltage_accumulator_size = 64;
   top1_voltage_feedback_accumulator = 0;
-  top1_fdbk_voltage_accumulator_size = 64;
+  top1_fdbk_voltage_accumulator_size = 0;
   top2_voltage_feedback_accumulator = 0;
-  top2_fdbk_voltage_accumulator_size = 64;
-  heater2_current_monitor_accumulator = 0;
-  heater2_current_accumulator_size = 64;
+  top2_fdbk_voltage_accumulator_size = 0;
   bias_feedback_accumulator = 0;
-  heater1_current_monitor_accumulator = 0;
+
   heater_reset_counter = 0;
   
 
@@ -426,13 +458,13 @@ void InitializeA36613(void)
 void UpdateHeaterPWM(void)
 {
   unsigned int Heater_error;
-  if ((global_data_A36613.heater1_current_monitor >= HEATER_MAX_CURRENT)|| (global_data_A36613.heater2_current_monitor >= HEATER_MAX_CURRENT))
+  if ((Heater1_current.reading_scaled_and_calibrated >= HEATER_MAX_CURRENT)|| (Heater2_current.reading_scaled_and_calibrated >= HEATER_MAX_CURRENT))
   {
     MDC-=HEATER_SMALL_STEP;
   }
-  else if (global_data_A36613.heater_output_voltage > global_data_A36613.heater_set_voltage)
+  else if (Heater_output_voltage.reading_scaled_and_calibrated > global_data_A36613.heater_set_voltage)
   {
-      Heater_error = global_data_A36613.heater_output_voltage - global_data_A36613.heater_set_voltage;
+      Heater_error = Heater_output_voltage.reading_scaled_and_calibrated - global_data_A36613.heater_set_voltage;
       if (Heater_error > 100)
       {
         MDC-=HEATER_SMALL_STEP;
@@ -447,9 +479,9 @@ void UpdateHeaterPWM(void)
       } */
       
   }
-  else if (global_data_A36613.heater_output_voltage < global_data_A36613.heater_set_voltage)
+  else if (Heater_output_voltage.reading_scaled_and_calibrated < global_data_A36613.heater_set_voltage)
   {
-      Heater_error = global_data_A36613.heater_output_voltage - global_data_A36613.heater_set_voltage;
+      Heater_error = global_data_A36613.heater_set_voltage - Heater_output_voltage.reading_scaled_and_calibrated;
       if (Heater_error > 100)
       {
         MDC+=HEATER_SMALL_STEP;
@@ -483,73 +515,39 @@ void UpdateTopVoltage(void)
   WriteLTC265X(&U4_LTC2654, LTC265X_WRITE_AND_UPDATE_DAC_B , global_data_A36613.top2_set_voltage);
 }
 
-void CheckHeaterFaults(void) //need 3 succesive fault conditions in order to trigger fault.
+void CheckHeaterFaults(void) 
 {
-  if (global_data_A36613.heater_output_voltage > HEATER_OVERVOLTAGE_TRIP) //Over voltage condition
-  {
-      heater_overvoltage_count++;
-  }
-  else
-  {
-    heater_overvoltage_count = 0;
-  }
-  if (heater_overvoltage_count >=10)
+  if (ETMAnalogCheckOverAbsolute(&Heater_output_voltage)) //Over voltage condition
   {
     global_data_A36613.status |= HEATER_OVERVOLTAGE_FLT;
     heater_reset_counter++;
     ResetHeater();
   }
+  
 
-  if ((global_data_A36613.heater1_current_monitor > HEATER_OVERCURRENT_TRIP) || (global_data_A36613.heater2_current_monitor > HEATER_OVERCURRENT_TRIP)) //Over current condition
-  {
-      heater_overcurrent_count++;
-  }
-  else
-  {
-    heater_overcurrent_count = 0;
-  }
-  if (heater_overcurrent_count >=10)
+  if (ETMAnalogCheckOverAbsolute(&Heater1_current) || ETMAnalogCheckOverAbsolute(&Heater2_current)) //Over current condition
   {
     global_data_A36613.status |= HEATER_OVERCURRENT_FLT;
     heater_reset_counter++;
     ResetHeater();
   }
 
-  if (global_data_A36613.control_state == STATE_READY)// heater undervoltage and under current should only be checked after warmup.
+  if (global_data_A36613.control_state == STATE_READY)// heater undervoltage and undercurrent should only be checked after warmup.
   {
-    if ((global_data_A36613.heater1_current_monitor < HEATER_UNDERCURRENT_TRIP) || (global_data_A36613.heater2_current_monitor < HEATER_UNDERCURRENT_TRIP)) //Under current condition
+    if (ETMAnalogCheckUnderAbsolute(&Heater1_current) || ETMAnalogCheckUnderAbsolute(&Heater2_current)) //Under current condition
     {
-        heater_undercurrent_count++;
-    }
-    else
-    {
-      heater_undercurrent_count = 0;
-    }
-  
-  if (heater_undercurrent_count >=30)
-  {
-    global_data_A36613.status |= HEATER_UNDERCURRENT_FLT;
+      global_data_A36613.status |= HEATER_UNDERCURRENT_FLT;
  //   heater_reset_counter++;
  //   ResetHeater();
-  }
-
-
-    if (global_data_A36613.heater_output_voltage < HEATER_UNDERVOLTAGE_TRIP) //Under voltage condition
-    {
-      heater_undervoltage_count++;
     }
-    else
+
+    if (ETMAnalogCheckUnderAbsolute(&Heater_output_voltage)) //Under voltage condition
     {
-      heater_undervoltage_count = 0;
+      global_data_A36613.status |= HEATER_UNDERVOLTAGE_FLT;
+      heater_reset_counter++;
+      ResetHeater();
     }
-  
-  if (heater_undervoltage_count >=30)
-  {
-    global_data_A36613.status |= HEATER_UNDERVOLTAGE_FLT;
-    heater_reset_counter++;
-    ResetHeater();
   }
-}
 }
 
 
@@ -560,13 +558,14 @@ void ResetHeater(void)
   { 
     global_data_A36613.status |=0x10; //heater not ready
     global_data_A36613.control_state = STATE_FAULT;
+  }
+  Heater_output_voltage.absolute_over_counter=0;
+  Heater_output_voltage.absolute_under_counter=0;
+  Heater1_current.absolute_over_counter=0;
+  Heater1_current.absolute_under_counter=0;
+  Heater2_current.absolute_over_counter=0;
+  Heater2_current.absolute_under_counter=0;
 
-  }
-  else
-  {
-    global_data_A36613.control_state= STATE_WARMUP;  
-  }
-  
 
 }
 
@@ -574,12 +573,12 @@ void ResetHeater(void)
 void __attribute__((interrupt, auto_psv)) _ADCP0Interrupt(void)
 {
   top1_voltage_feedback_accumulator += ADCBUF1; // averages 64 samples of data (add 64, then shift left by 6). Then shifts the data to get a 8bit number (additional shift of 2).
-  top1_fdbk_voltage_accumulator_size--;
+  top1_fdbk_voltage_accumulator_size++;
 
-  if (top1_fdbk_voltage_accumulator_size == 0) //Check if 64 samples have accumulated
+  if (top1_fdbk_voltage_accumulator_size == ACCUMULATOR_SIZE) //Check if 64 samples have accumulated
   {
     global_data_A36613.top1_voltage_feedback = top1_voltage_feedback_accumulator; // store averaged value in global struct.
-    top1_fdbk_voltage_accumulator_size = 64; // reset accumulator
+    top1_fdbk_voltage_accumulator_size = 0; // reset accumulator
     top1_voltage_feedback_accumulator = 0;    
   }
     
@@ -590,12 +589,12 @@ void __attribute__((interrupt, auto_psv)) _ADCP0Interrupt(void)
 void __attribute__((interrupt, no_auto_psv)) _ADCP1Interrupt (void)
 {
   top2_voltage_feedback_accumulator += ADCBUF3; // averages 64 samples of data (add 64, then shift left by 6). Then shifts the data to get a 8bit number (additional shift of 2).
-  top2_fdbk_voltage_accumulator_size--;
+  top2_fdbk_voltage_accumulator_size++;
 
-  if (top2_fdbk_voltage_accumulator_size == 0) //Check if 64 samples have accumulated
+  if (top2_fdbk_voltage_accumulator_size == ACCUMULATOR_SIZE) //Check if 64 samples have accumulated
   {
     global_data_A36613.top2_voltage_feedback = top2_voltage_feedback_accumulator; // store averaged value in global struct.
-    top2_fdbk_voltage_accumulator_size = 64; // reset accumulator
+    top2_fdbk_voltage_accumulator_size = 0; // reset accumulator
     top2_voltage_feedback_accumulator = 0;
   }
     
@@ -605,19 +604,17 @@ void __attribute__((interrupt, no_auto_psv)) _ADCP1Interrupt (void)
 
 void __attribute__((interrupt, no_auto_psv)) _ADCP2Interrupt (void)
 {
-    PIN_LED_TEST_POINT_A = 1;
-  heater_output_voltage_accumulator += ADCBUF4; // averages 64 samples of data (add 64, then shift left by 6). Then shifts the data to get a 8bit number (additional shift of 2).
+  Heater_output_voltage.filtered_adc_reading += ADCBUF4; // averages 64 samples of data (add 64, then shift left by 6). Then shifts the data to get a 8bit number (additional shift of 2).
   bias_feedback_accumulator += ADCBUF5;
-  heater_voltage_accumulator_size--;
-    PIN_LED_TEST_POINT_A = 0;
-  if (heater_voltage_accumulator_size == 0) //Check if 64 samples have accumulated
+  Heater_output_voltage.adc_accumulator++;
+  if (Heater_output_voltage.adc_accumulator == ACCUMULATOR_SIZE) //Check if all samples have accumulated
   {
-    global_data_A36613.heater_output_voltage = ETMScaleFactor16(heater_output_voltage_accumulator,HEATER_VOLTAGE_SCALING_FACTOR,0); // store averaged value in global struct.
+    ETMAnalogScaleCalibrateADCReading(&Heater_output_voltage); // store averaged value in global struct.
+    Heater_output_voltage.adc_accumulator = 0;
+    Heater_output_voltage.filtered_adc_reading = 0;
     global_data_A36613.bias_feedback = bias_feedback_accumulator;
-    heater_voltage_accumulator_size = 64; // reset accumulator
-    heater_output_voltage_accumulator = 0;
     bias_feedback_accumulator = 0;
-    /*Heater_PID.measuredOutput = global_data_A36613.heater_output_voltage; //turn 16bit number to fractional
+    /*Heater_PID.measuredOutput = global_data_A36613.Heater_output_voltage; //turn 16bit number to fractional
     Heater_PID.controlReference = global_data_A36613.heater_set_voltage;
     PID(&Heater_PID);
     MDC = Heater_PID.controlOutput;
@@ -639,12 +636,12 @@ void __attribute__((interrupt, no_auto_psv)) _ADCP2Interrupt (void)
 void __attribute__((interrupt, no_auto_psv)) _ADCP3Interrupt (void)
 {
   top1_voltage_monitor_accumulator += ADCBUF7; // averages 64 samples of data (add 64, then shift left by 6). Then shifts the data to get a 8bit number (additional shift of 2).
-  top1_voltage_accumulator_size--;
+  top1_voltage_accumulator_size++;
 
-  if (top1_voltage_accumulator_size == 0) //Check if 64 samples have accumulated
+  if (top1_voltage_accumulator_size == ACCUMULATOR_SIZE) //Check if 64 samples have accumulated
   {
     global_data_A36613.top1_voltage_monitor= top1_voltage_monitor_accumulator; // store averaged value in global struct.
-    top1_voltage_accumulator_size = 64; // reset accumulator
+    top1_voltage_accumulator_size = 0; // reset accumulator
     top1_voltage_monitor_accumulator = 0;
   }
     
@@ -654,16 +651,16 @@ void __attribute__((interrupt, no_auto_psv)) _ADCP3Interrupt (void)
 
 void __attribute__((interrupt, no_auto_psv)) _ADCP4Interrupt (void)
 {
-  heater1_current_monitor_accumulator += ADCBUF8; // averages 64 samples of data (add 64, then shift left by 6). Then shifts the data to get a 8bit number (additional shift of 2).
+  Heater1_current.filtered_adc_reading += ADCBUF8; // averages 64 samples of data (add 64, then shift left by 6). Then shifts the data to get a 8bit number (additional shift of 2).
   top2_voltage_monitor_accumulator += ADCBUF9;
-  top2_voltage_accumulator_size--;
+  Heater1_current.adc_accumulator++;
 
-  if (top2_voltage_accumulator_size == 0) //Check if 64 samples have accumulated
+  if (Heater1_current.adc_accumulator == ACCUMULATOR_SIZE) //Check if 64 samples have accumulated
   {
-    global_data_A36613.heater1_current_monitor= ETMScaleFactor16(heater1_current_monitor_accumulator, HEATER_CURRENT_SCALING_FACTOR,0); // store averaged value in global struct.
+    ETMAnalogScaleCalibrateADCReading(&Heater1_current); // store averaged value in global struct.
     global_data_A36613.top2_voltage_monitor= top2_voltage_monitor_accumulator; // store averaged value in global struct.
-    top2_voltage_accumulator_size = 64; // reset accumulator
-    heater1_current_monitor_accumulator = 0;
+    Heater1_current.adc_accumulator = 0; // reset accumulator
+    Heater1_current.filtered_adc_reading = 0;
     top2_voltage_monitor_accumulator = 0;
   }
     
@@ -673,14 +670,14 @@ void __attribute__((interrupt, no_auto_psv)) _ADCP4Interrupt (void)
 
 void __attribute__((interrupt, no_auto_psv)) _ADCP5Interrupt (void)
 {
-  heater2_current_monitor_accumulator += ADCBUF10; // averages 64 samples of data (add 64, then shift left by 6). Then shifts the data to get a 8bit number (additional shift of 2).
-  heater2_current_accumulator_size--;
+  Heater2_current.filtered_adc_reading += ADCBUF10; // averages 64 samples of data (add 64, then shift left by 6). Then shifts the data to get a 8bit number (additional shift of 2).
+  Heater2_current.adc_accumulator++;
 
-  if (heater2_current_accumulator_size == 0) //Check if 64 samples have accumulated
+  if (Heater2_current.adc_accumulator == ACCUMULATOR_SIZE) //Check if 64 samples have accumulated
   {
-    global_data_A36613.heater2_current_monitor= ETMScaleFactor16(heater2_current_monitor_accumulator, HEATER_CURRENT_SCALING_FACTOR,0); // store averaged value in global struct.
-    heater2_current_accumulator_size = 64; // reset accumulator
-    heater2_current_monitor_accumulator = 0;
+    ETMAnalogScaleCalibrateADCReading(&Heater2_current); // store averaged value in global struct.
+    Heater2_current.adc_accumulator = 0; // reset accumulator
+    Heater2_current.filtered_adc_reading = 0;
   }
     
   _ADCP5IF = 0;

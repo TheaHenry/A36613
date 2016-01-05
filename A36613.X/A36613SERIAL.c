@@ -19,7 +19,10 @@ typedef struct
 }InputData;
 
 InputData A36613inputdata;
-
+extern ControlData global_data_A36613;
+extern AnalogInput Heater_output_voltage;
+extern AnalogInput Heater1_current;
+extern AnalogInput Heater2_current;
 
 // possible commands (application specific):
 
@@ -105,18 +108,18 @@ void A36613LoadData(int message_type)
     break;
 
     case (HTRV_FEEDBACK_MSG):
-      Buffer64WriteByte(&uart1_output_buffer, (global_data_A36613.heater_output_voltage >> 8));
-      Buffer64WriteByte(&uart1_output_buffer, (global_data_A36613.heater_output_voltage & 0x00FF));
+      Buffer64WriteByte(&uart1_output_buffer, (Heater_output_voltage.reading_scaled_and_calibrated >> 8));
+      Buffer64WriteByte(&uart1_output_buffer, (Heater_output_voltage.reading_scaled_and_calibrated & 0x00FF));
     break;
 
     case (HTRI1_FEEDBACK_MSG):
-      Buffer64WriteByte(&uart1_output_buffer, (global_data_A36613.heater1_current_monitor >> 8));
-      Buffer64WriteByte(&uart1_output_buffer, (global_data_A36613.heater1_current_monitor & 0x00FF));
+      Buffer64WriteByte(&uart1_output_buffer, (Heater1_current.reading_scaled_and_calibrated >> 8));
+      Buffer64WriteByte(&uart1_output_buffer, (Heater1_current.reading_scaled_and_calibrated & 0x00FF));
     break;
 
     case (HTRI2_FEEDBACK_MSG):
-      Buffer64WriteByte(&uart1_output_buffer, (global_data_A36613.heater2_current_monitor >> 8));
-      Buffer64WriteByte(&uart1_output_buffer, (global_data_A36613.heater2_current_monitor & 0x00FF));
+      Buffer64WriteByte(&uart1_output_buffer, (Heater2_current.reading_scaled_and_calibrated >> 8));
+      Buffer64WriteByte(&uart1_output_buffer, (Heater2_current.reading_scaled_and_calibrated & 0x00FF));
     break;
 
   }
