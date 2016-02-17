@@ -27,13 +27,14 @@
 #pragma config GSS = OFF                // General Segment Code Protection (General Segment Code protect is disabled)
 
 // FOSCSEL
-#pragma config FNOSC = FRCPLL           // Oscillator Source Selection (Internal Fast RC with PLL (FRCPLL))
+#pragma config FNOSC = PRIPLL           // Oscillator Source Selection (Primary Oscillator (XT, HS, EC) with PLL)
 #pragma config IESO = OFF               // Internal External Switch Over Mode (Start up with user-selected oscillator source)
 
 // FOSC
-#pragma config POSCMD = NONE            // Primary Oscillator Source (Primary Oscillator disabled)
-#pragma config OSCIOFNC = OFF           // OSC2 Pin Function (OSC2 is clock output)
+#pragma config POSCMD = EC              // Primary Oscillator Source (EC (External Clock) Mode)
+#pragma config OSCIOFNC = OFF            // OSC2 Pin Function (OSC2 is general purpose digital I/O pin)
 #pragma config FCKSM = CSECME           // Clock Switching Mode bits (Both Clock switching and Fail-safe Clock Monitor are enabled)
+
 
 // FWDT
 #pragma config WDTPOST = PS32768        // Watchdog Timer Postscaler (1:32,768)
@@ -42,7 +43,7 @@
 #pragma config FWDTEN = OFF             // Watchdog Timer Enable (Watchdog timer enabled/disabled by user software)
 
 // FPOR
-#pragma config FPWRT = PWR128           // POR Timer Value (128ms)
+#pragma config FPWRT = PWR16           // POR Timer Value (16ms)
 #pragma config ALTSS1 = OFF             // Enable Alternate SS1 pin bit (SS1 is selected as the I/O pin for SPI1)
 #pragma config ALTQIO = OFF             // Enable Alternate QEI1 pin bit (QEA1, QEB1, INDX1 are selected as inputs to QEI1)
 
@@ -116,7 +117,14 @@ void DoStateMachine(void)
   case STATE_STARTUP:
     InitializeA36613();
     global_data_A36613.control_state = STATE_WARMUP;
-    while(!A36613ReceiveData());
+    while(!A36613ReceiveData())
+    {
+        if (_T3IF ) //every 500us
+      {
+        _T3IF = 0;
+        A36613TransmitData(0xF0);
+        }
+    }
   break;
 	
   case STATE_WARMUP:
@@ -136,9 +144,9 @@ void DoStateMachine(void)
         _T3IF = 0;
         flashDuration--;
           
-        if (transmit_message > 0xF5)
+        if (transmit_message > 0xF4)
         {
-          transmit_message = 0xF1;
+          transmit_message = 0xF0;
         }
         A36613TransmitData(transmit_message);
         transmit_message++;
@@ -189,9 +197,9 @@ void DoStateMachine(void)
       { 
         _T3IF = 0;
         flashDuration--;
-        if (transmit_message > 0xF5)
+        if (transmit_message > 0xF4)
         {
-          transmit_message = 0xF1;
+          transmit_message = 0xF0;
         }
         A36613TransmitData(transmit_message);
         transmit_message++;
@@ -275,6 +283,7 @@ void DoStateMachine(void)
 void ConfigureClock(void)
 {
 
+
   //**********************Setup Clock speeds*********************************//
   //   Fin=7.3MHz
   //   Fosc = Fin*M/(N1+N2), Fcy=Fosc/2
@@ -282,35 +291,35 @@ void ConfigureClock(void)
   //*************************************************************************//
   // Configure PLL prescaler, PLL postscaler, PLL divisor
   //_TUN = 4;//tune FRC to 7.49MHz
-  PLLFBD = 48;// M = 50
-  CLKDIVbits.PLLPOST=0;// N2 = 2
-  CLKDIVbits.PLLPRE=1;// N1 = 3
+  //PLLFBD = 48;// M = 50
+  //CLKDIVbits.PLLPOST=0;// N2 = 2
+  //CLKDIVbits.PLLPRE=1;// N1 = 3
   // Initiate Clock Switch to Internal FRC with PLL (NOSC = 0b001)
-  __builtin_write_OSCCONH(0x01);
-  __builtin_write_OSCCONL(OSCCON | 0x01);
+  //__builtin_write_OSCCONH(0x01);
+  //__builtin_write_OSCCONL(OSCCON | 0x01);
   // Wait for Clock switch to occur
-  while (OSCCONbits.COSC != 0b001);
+  //while (OSCCONbits.COSC != 0b001);
   // Wait for PLL to lock
+  //while(OSCCONbits.LOCK!=1) {};
+
+
+  CLKDIVbits.PLLPOST = 0b00; // Set PLL Postscaler (N2) to 2.
+  CLKDIVbits.PLLPRE = 0b00000; // Set PLL Prescaler (N1) to 2.
+  PLLFBD = 58; // Set PLL Divider (M) to 60.
   while(OSCCONbits.LOCK!=1) {};
 
-
-// CLKDIVbits.PLLPOST = 0b00; // Set PLL Postscaler (N2) to 2.
-//  CLKDIVbits.PLLPRE = 0b00000; // Set PLL Prescaler (N1) to 2.
-//  PLLFBD = 58; // Set PLL Divider (M) to 60.
-
-
   //Auxilary clock configuration
-//  _SELACLK = 0; //PLL output (FVCO) provides the source clock for the auxiliary clock divider
-//  _APSTSCLR = 0b111; // Auxiliary Clock Output Divider 1:1
+  _SELACLK = 0; //PLL output (FVCO) provides the source clock for the auxiliary clock divider
+  _APSTSCLR = 0b111; // Auxiliary Clock Output Divider 1:1
 
-  ACLKCONbits.FRCSEL = 1; /* Internal FRC is clock source for auxiliary PLL */
+ // ACLKCONbits.FRCSEL = 1; /* Internal FRC is clock source for auxiliary PLL */
   
-  ACLKCONbits.SELACLK = 1;/* Auxiliary PLL provides the source clock for the */
+  //ACLKCONbits.SELACLK = 1;/* Auxiliary PLL provides the source clock for the */
   /* clock divider */
-  ACLKCONbits.APSTSCLR = 7;/* Auxiliary Clock Output Divider is Divide-by-1 */
-  ACLKCONbits.ENAPLL = 1; /* APLL is enabled */
+  //ACLKCONbits.APSTSCLR = 7;/* Auxiliary Clock Output Divider is Divide-by-1 */
+  //ACLKCONbits.ENAPLL = 1; /* APLL is enabled */
 
-  while(ACLKCONbits.APLLCK != 1){}; /* Wait for Auxiliary PLL to Lock */
+  //while(ACLKCONbits.APLLCK != 1){}; /* Wait for Auxiliary PLL to Lock */
   /* Given a 7.5MHz input from the FRC the Auxiliary Clock for the ADC and PWM */
   /* modules are 7.5MHz * 16 = 120MHz */
 

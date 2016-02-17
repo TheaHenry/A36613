@@ -3,7 +3,7 @@
 #define __A36613_H
 
 
-#define FCY_CLK 31000000
+#define FCY_CLK 30000000
 
 #include <xc.h>
 #include <smpsadc.h>

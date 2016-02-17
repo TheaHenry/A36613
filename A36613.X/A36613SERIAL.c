@@ -130,10 +130,26 @@ void A36613LoadData(int message_type)
 
 void A36613TransmitData(int message_type)
 {
+  if (PIN_LED_TEST_POINT_A == 0)
+  {
+      PIN_LED_TEST_POINT_A =1;
+  }
+  else
+  {
+      PIN_LED_TEST_POINT_A = 0;
+  }
   A36613LoadData(message_type);
   if ((!UART_STATS_BITS.UTXBF) && (Buffer64IsNotEmpty(&uart1_output_buffer)) )
   { //fill TX REG and then wait for interrupt to fill the rest.
     U1TXREG =  Buffer64ReadByte(&uart1_output_buffer);
+  }
+  if (PIN_LED_TEST_POINT_A == 0)
+  {
+      PIN_LED_TEST_POINT_A =1;
+  }
+  else
+  {
+      PIN_LED_TEST_POINT_A = 0;
   }
 };
 
