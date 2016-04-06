@@ -19,7 +19,7 @@
 }InputData;
 
 InputData A36613inputdata;*/
-unsigned int recieveMessage[recieveMessageLength];
+unsigned char recieveMessage[recieveMessageLength];
 extern ControlData global_data_A36613;
 extern AnalogInput Heater_output_voltage;
 extern AnalogInput Heater1_current;
@@ -193,24 +193,24 @@ int A36613ReceiveData(void)
   while ( (Buffer64BytesInBuffer(&uart1_input_buffer) >= COMMAND_LENGTH)) {
     // Look for a command
     unsigned char read_byte;
-
     unsigned int crc;
     read_byte = Buffer64ReadByte(&uart1_input_buffer);
     if (read_byte == SETTINGS_MSG) 
     {
       // All of the sync bytes matched, this should be a valid command
-      recieveMessage[1] = read_byte;
-      recieveMessage[1] = (recieveMessage[1] <<8) + Buffer64ReadByte(&uart1_input_buffer) & 0x00FF;
+      recieveMessage[0] = read_byte;
+      recieveMessage[1] = Buffer64ReadByte(&uart1_input_buffer);
       recieveMessage[2] = Buffer64ReadByte(&uart1_input_buffer);
-      recieveMessage[2] = (recieveMessage[2] <<8) + Buffer64ReadByte(&uart1_input_buffer) & 0x00FF;
       recieveMessage[3] = Buffer64ReadByte(&uart1_input_buffer);
-      recieveMessage[3] = (recieveMessage[3] <<8) + Buffer64ReadByte(&uart1_input_buffer) & 0x00FF;
       recieveMessage[4] = Buffer64ReadByte(&uart1_input_buffer);
-      recieveMessage[4] = (recieveMessage[4] <<8) + Buffer64ReadByte(&uart1_input_buffer) & 0x00FF;
       recieveMessage[5] = Buffer64ReadByte(&uart1_input_buffer);
-      recieveMessage[5] = (recieveMessage[5] <<8) + Buffer64ReadByte(&uart1_input_buffer) & 0x00FF;
-            
-      if (!calculateCRC(CRCseed, *recieveMessage[0], recieveMessageLength))
+      recieveMessage[6] = Buffer64ReadByte(&uart1_input_buffer);
+      recieveMessage[7] = Buffer64ReadByte(&uart1_input_buffer);
+      crc = Buffer64ReadByte(&uart1_input_buffer);
+      crc <<=8;
+      crc += Buffer64ReadByte(&uart1_input_buffer);
+
+      if (crc == ETMCRC16(&recieveMessage[0], 8))
       {
         A36613DownloadData();
         return 1;
@@ -224,21 +224,10 @@ int A36613ReceiveData(void)
 
 void A36613DownloadData(void)
 {
-  global_data_A36613.status = recieveMessage[1] & 0x00FF;
-  global_data_A36613.top1_set_voltage = recieveMessage[2];
-  global_data_A36613.top2_set_voltage = recieveMessage[3];
-  global_data_A36613.heater_set_voltage = recieveMessage[4];;
-}
-
-
-unsigned int calculateCRC(unsigned int crc, const void *data_ptr, unsigned int data_length) //returns 16 bit calculated CRC based on CRCtable.
-{
-  const uint8_t *c = data_ptr;
-
-    while (data_length--)
-        crc = (crc << 8) ^ crctable[((crc >> 8) ^ *c++)];
-
-    return crc;
+  global_data_A36613.status = recieveMessage[1];
+  global_data_A36613.top1_set_voltage = (recieveMessage[2]<<8) + (recieveMessage[3] &0x00FF);
+  global_data_A36613.top2_set_voltage = (recieveMessage[4]<<8) + (recieveMessage[5] &0x00FF);
+  global_data_A36613.heater_set_voltage = (recieveMessage[6]<<8) + (recieveMessage[7] &0x00FF);
 }
 
 
