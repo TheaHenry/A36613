@@ -246,9 +246,9 @@ void DoStateMachine(void)
         _T3IF = 0;
         flashDuration--;
           
-        if (transmit_message > 0xF5)
+        if (transmit_message > 0xF4)
         {
-          transmit_message = 0xF1;
+          transmit_message = 0xF0;
         }
         A36613TransmitData(transmit_message);
         transmit_message++;

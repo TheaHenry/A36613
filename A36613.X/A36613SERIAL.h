@@ -39,11 +39,16 @@
 #define HTRI1_FEEDBACK_MSG 	0xF3
 #define HTRI2_FEEDBACK_MSG 	0xF4
 
+#define recieveMessageLength 5
+#define CRCseed               0xFFFF
+#define CRCPoly         
+
 
 void InitializeA36613Serial(void);
 
 void A36613TransmitData(int message_type); 
 int A36613ReceiveData(void); //returns 1 if the RX message has been fully received. This functions checks CRC and if good, moves data from input buffer to global data structure.
+unsigned int calculateCRC(unsigned int CRCseed, const void *data_ptr, unsigned int data_length); //returns 16 bit calculated CRC based on CRCtable. input is crc seed, pointer to the data, and data length in bytes.
 
 
 
