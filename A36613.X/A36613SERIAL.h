@@ -39,12 +39,11 @@
 #define HTRI1_FEEDBACK_MSG 	0xF3
 #define HTRI2_FEEDBACK_MSG 	0xF4
 
-#define recieveMessageLength 10
 
 
 void InitializeA36613Serial(void);
 
-void A36613TransmitData(int message_type); 
+void A36613TransmitData(unsigned char message_type); 
 int A36613ReceiveData(void); //returns 1 if the RX message has been fully received. This functions checks CRC and if good, moves data from input buffer to global data structure.
 
 

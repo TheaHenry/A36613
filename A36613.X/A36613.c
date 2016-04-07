@@ -80,7 +80,7 @@ unsigned int top2_fdbk_voltage_accumulator_size;
 
 unsigned int bias_feedback_accumulator;
 
-unsigned int transmit_message;
+unsigned char transmit_message;
 unsigned int flashDuration;
 unsigned int heater_reset_counter;
 
@@ -119,7 +119,7 @@ void DoStateMachine(void)
     global_data_A36613.control_state = STATE_WARMUP;
     while(!A36613ReceiveData())
     {
-        if (_T3IF ) //every 500us
+        if (_T3IF ) //every 400us
       {
         _T3IF = 0;
         A36613TransmitData(0xF0);
@@ -139,7 +139,7 @@ void DoStateMachine(void)
     {
       _PTEN =1; //Turn heater on
       A36613ReceiveData();
-      if (_T3IF ) //every 500us
+      if (_T3IF ) //every 400us
       { 
         _T3IF = 0;
         flashDuration--;
@@ -156,9 +156,9 @@ void DoStateMachine(void)
 
       if (flashDuration ==0) //every 500ms
       {
-        flashDuration = 1000;
+        flashDuration = 1250;
         heater_warmup_counter++;
-        UpdateTopVoltage(); // to do :change this timing to match receiving (1ms)
+        //UpdateTopVoltage(); // to do :change this timing to match receiving (1ms)
         if(PIN_LED_OPERATIONAL_GREEN==1) //LED turns on once a second
         {
           PIN_LED_OPERATIONAL_GREEN=0;
@@ -193,7 +193,7 @@ void DoStateMachine(void)
     while(global_data_A36613.control_state == STATE_READY)
     {
       A36613ReceiveData();
-      if (_T3IF ) //every 500us
+      if (_T3IF ) //every 400us
       { 
         _T3IF = 0;
         flashDuration--;
@@ -209,8 +209,8 @@ void DoStateMachine(void)
 
       if (flashDuration ==0) //every 500ms
       {
-        flashDuration = 1000;
-        UpdateTopVoltage(); // to do :change this timing to match receiving (1ms)
+        flashDuration = 1250;
+        //UpdateTopVoltage(); // to do :change this timing to match receiving (1ms)
         if(PIN_LED_OPERATIONAL_GREEN==1) //LED turns on once a second
         {
           PIN_LED_OPERATIONAL_GREEN=0;
@@ -241,7 +241,7 @@ void DoStateMachine(void)
     {
       global_data_A36613.status |= HEATER_NOT_READY;
       A36613ReceiveData();
-      if (_T3IF ) //every 500us
+      if (_T3IF ) //every 400us
       { 
         _T3IF = 0;
         flashDuration--;
@@ -256,8 +256,8 @@ void DoStateMachine(void)
 
       if (flashDuration ==0) //every 500ms
       {
-        flashDuration = 1000;
-        UpdateTopVoltage(); // to do :change this timing to match receiving (1ms)
+        flashDuration = 1250;
+        //UpdateTopVoltage(); // to do :change this timing to match receiving (1ms)
         if(PIN_LED_OPERATIONAL_GREEN==1) //LED turns on once a second
         {
           PIN_LED_OPERATIONAL_GREEN=0;
