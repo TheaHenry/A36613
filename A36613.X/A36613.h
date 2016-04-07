@@ -15,6 +15,7 @@
 #include "A36613SERIAL.h"
 
 
+
 /*
   
   Hardware Module Resource Usage
@@ -81,7 +82,7 @@
    Period should be set to 10mS
 */
 #define T3CON_VALUE                    (T3_ON & T3_IDLE_CON & T3_GATE_OFF & T3_PS_1_8 & T3_SOURCE_INT)
-#define PR3_PERIOD_US                  500   // 500uS
+#define PR3_PERIOD_US                  400   // 400uS
 #define PR3_VALUE_10_MILLISECONDS      (unsigned int)((FCY_CLK / 1000000)*PR3_PERIOD_US/8)
 
 
