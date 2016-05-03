@@ -91,7 +91,7 @@ void A36613LoadData(unsigned char message_type)
   unsigned int crc;
   transmitMessage[0] = message_type;
   transmitMessage[1] = global_data_A36613.status;
-  if (global_data_A36613.top1_voltage_feedback < global_data_A36613.top2_voltage_feedback)
+  if (global_data_A36613.top1_voltage_feedback > global_data_A36613.top2_voltage_feedback)
   {
     transmitMessage[2] = global_data_A36613.top1_voltage_feedback >> 8;
     transmitMessage[3] = global_data_A36613.top1_voltage_feedback & 0x00FF;
