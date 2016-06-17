@@ -3,17 +3,7 @@
 
 // This is the firmware for modulator- HV section
 
-/*functionality that needs to be developed:
-
- *bootloader
-
-	Other open items:
-	* CRC?
-	* watchdog?
-  * UpdateTopVoltage(); // change this to be done every 1 sec? Perhaps call it when successfully receiving a message.
-  * A36613TransmitData(); //this need to be gated
-
-*/
+// comment- a PID type control is commented out for optional use. I believe it is working, but I haven't adjusted the coeficients for optimal performance.
 
 /* -------------------- Device configuration --------------------------  */
 
@@ -158,7 +148,7 @@ void DoStateMachine(void)
       {
         flashDuration = 1000;
         heater_warmup_counter++;
-        //UpdateTopVoltage(); // to do :change this timing to match receiving (1ms)
+
         if(PIN_LED_OPERATIONAL_GREEN==1) //LED turns on once a second
         {
           PIN_LED_OPERATIONAL_GREEN=0;
@@ -210,7 +200,7 @@ void DoStateMachine(void)
       if (flashDuration ==0) //every 500ms
       {
         flashDuration = 1000;
-        //UpdateTopVoltage(); // to do :change this timing to match receiving (1ms)
+
         if(PIN_LED_OPERATIONAL_GREEN==1) //LED turns on once a second
         {
           PIN_LED_OPERATIONAL_GREEN=0;
@@ -257,7 +247,7 @@ void DoStateMachine(void)
       if (flashDuration ==0) //every 500ms
       {
         flashDuration = 1250;
-        //UpdateTopVoltage(); // to do :change this timing to match receiving (1ms)
+
         if(PIN_LED_OPERATIONAL_GREEN==1) //LED turns on once a second
         {
           PIN_LED_OPERATIONAL_GREEN=0;
@@ -311,17 +301,6 @@ void ConfigureClock(void)
   //Auxilary clock configuration
   _SELACLK = 0; //PLL output (FVCO) provides the source clock for the auxiliary clock divider
   _APSTSCLR = 0b111; // Auxiliary Clock Output Divider 1:1
-
- // ACLKCONbits.FRCSEL = 1; /* Internal FRC is clock source for auxiliary PLL */
-  
-  //ACLKCONbits.SELACLK = 1;/* Auxiliary PLL provides the source clock for the */
-  /* clock divider */
-  //ACLKCONbits.APSTSCLR = 7;/* Auxiliary Clock Output Divider is Divide-by-1 */
-  //ACLKCONbits.ENAPLL = 1; /* APLL is enabled */
-
-  //while(ACLKCONbits.APLLCK != 1){}; /* Wait for Auxiliary PLL to Lock */
-  /* Given a 7.5MHz input from the FRC the Auxiliary Clock for the ADC and PWM */
-  /* modules are 7.5MHz * 16 = 120MHz */
 
   /* Disable Watch Dog Timer */
         RCONbits.SWDTEN = 0;
@@ -482,7 +461,7 @@ void UpdateHeaterPWM(void)
       {
         MDC-= HEATER_LARGE_STEP;
       }
-      /*if (Heater_error < 100)
+      /*if (Heater_error < 100) // Heater warm up duration is currently managed by duration, not a stable voltage.
       {
         global_data_A36613.control_state = STATE_READY;
       } */
@@ -623,7 +602,8 @@ void __attribute__((interrupt, no_auto_psv)) _ADCP2Interrupt (void)
     Heater_output_voltage.filtered_adc_reading = 0;
     global_data_A36613.bias_feedback = bias_feedback_accumulator;
     bias_feedback_accumulator = 0;
-    /*Heater_PID.measuredOutput = global_data_A36613.Heater_output_voltage; //turn 16bit number to fractional
+    /* This is another PID segment- where you update the PWM duty. Should only be used if using PID.
+    Heater_PID.measuredOutput = global_data_A36613.Heater_output_voltage; //turn 16bit number to fractional
     Heater_PID.controlReference = global_data_A36613.heater_set_voltage;
     PID(&Heater_PID);
     MDC = Heater_PID.controlOutput;

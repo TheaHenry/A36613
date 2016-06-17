@@ -1,4 +1,4 @@
-// Header file for new Interface Board
+// Header file for dual modulator HV board
 #ifndef __A36613_H
 #define __A36613_H
 
@@ -21,9 +21,8 @@
   Hardware Module Resource Usage
 
   SPI2   - Used/Configured by LTC265X Module
- Timer 4 - UART RX
- * Timer5 - UART TX
- * Timer3 - 10ms timer
+
+  Timer3 - 10ms timer
   Timer1 - Triggers ADC conversion for all channels
   ADC Module
   PWM module

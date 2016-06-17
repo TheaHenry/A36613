@@ -2,23 +2,9 @@
 #include <xc.h>
 #include <uart.h>
 #include "A36613SERIAL.h"
-#include "Buffer64.h"
 #include "A36613.h"
 
 
-/*typedef struct
-{
-  unsigned char status;
-  unsigned char top1_set_hi;
-  unsigned char top1_set_lo;
-  unsigned char top2_set_hi;
-  unsigned char top2_set_lo;
-  unsigned char heater_set_hi;
-  unsigned char heater_set_lo;
-
-}InputData;
-
-InputData A36613inputdata;*/
 
 extern ControlData global_data_A36613;
 extern AnalogInput Heater_output_voltage;
@@ -56,12 +42,10 @@ extern void UpdateTopVoltage(void);
 
 
 
-BUFFER64BYTE uart1_input_buffer;
-BUFFER64BYTE uart1_output_buffer;
+BUFFERBYTE64 uart1_input_buffer;
+BUFFERBYTE64 uart1_output_buffer;
 
 
-//void A36613MakeCRC(unsigned OutputData* data);
-//int A36613CheckCRC(unsigned InputData* data);
 void A36613LoadData(unsigned char data); //Moves data from main global structure to output buffer and generates CRC.
 void A36613DownloadData(unsigned char *msg_data); //Checks CRC and if good - moves data from input buffer to main global variable.
 
@@ -135,16 +119,16 @@ void A36613LoadData(unsigned char message_type)
   
   crc = ETMCRC16(&transmitMessage[0],8);
 
-  Buffer64WriteByte(&uart1_output_buffer,transmitMessage[0]);
-  Buffer64WriteByte(&uart1_output_buffer, transmitMessage[1]);
-  Buffer64WriteByte(&uart1_output_buffer, transmitMessage[2]);
-  Buffer64WriteByte(&uart1_output_buffer, transmitMessage[3]);
-  Buffer64WriteByte(&uart1_output_buffer, transmitMessage[4]);
-  Buffer64WriteByte(&uart1_output_buffer, transmitMessage[5]);
-  Buffer64WriteByte(&uart1_output_buffer, transmitMessage[6]);
-  Buffer64WriteByte(&uart1_output_buffer, transmitMessage[7]);
-  Buffer64WriteByte(&uart1_output_buffer, (crc >> 8)); //should be crc hi
-  Buffer64WriteByte(&uart1_output_buffer, (crc & 0xFF)); //should be crc lo
+  BufferByte64WriteByte(&uart1_output_buffer,transmitMessage[0]);
+  BufferByte64WriteByte(&uart1_output_buffer, transmitMessage[1]);
+  BufferByte64WriteByte(&uart1_output_buffer, transmitMessage[2]);
+  BufferByte64WriteByte(&uart1_output_buffer, transmitMessage[3]);
+  BufferByte64WriteByte(&uart1_output_buffer, transmitMessage[4]);
+  BufferByte64WriteByte(&uart1_output_buffer, transmitMessage[5]);
+  BufferByte64WriteByte(&uart1_output_buffer, transmitMessage[6]);
+  BufferByte64WriteByte(&uart1_output_buffer, transmitMessage[7]);
+  BufferByte64WriteByte(&uart1_output_buffer, (crc >> 8)); //should be crc hi
+  BufferByte64WriteByte(&uart1_output_buffer, (crc & 0xFF)); //should be crc lo
 };
 
 
@@ -159,9 +143,9 @@ void A36613TransmitData(unsigned char message_type)
       PIN_LED_TEST_POINT_A = 0;
   }
   A36613LoadData(message_type);
-  if ((!UART_STATS_BITS.UTXBF) && (Buffer64IsNotEmpty(&uart1_output_buffer)) )
+  if ((!UART_STATS_BITS.UTXBF) && (BufferByte64IsNotEmpty(&uart1_output_buffer)) )
   { //fill TX REG and then wait for interrupt to fill the rest.
-    U1TXREG =  Buffer64ReadByte(&uart1_output_buffer);
+    U1TXREG =  BufferByte64ReadByte(&uart1_output_buffer);
   }
   if (PIN_LED_TEST_POINT_A == 0)
   {
@@ -176,26 +160,26 @@ void A36613TransmitData(unsigned char message_type)
 int A36613ReceiveData(void)
 {
 
-  while ( (Buffer64BytesInBuffer(&uart1_input_buffer) >= COMMAND_LENGTH)) {
+  while ( (BufferByte64BytesInBuffer(&uart1_input_buffer) >= COMMAND_LENGTH)) {
     // Look for a command
     unsigned char recieveMessage[8];
     unsigned char read_byte;
     unsigned int crc;
-    read_byte = Buffer64ReadByte(&uart1_input_buffer);
+    read_byte = BufferByte64ReadByte(&uart1_input_buffer);
     if (read_byte == SETTINGS_MSG) 
     {
       // All of the sync bytes matched, this should be a valid command
       recieveMessage[0] = read_byte;
-      recieveMessage[1] = Buffer64ReadByte(&uart1_input_buffer);
-      recieveMessage[2] = Buffer64ReadByte(&uart1_input_buffer);
-      recieveMessage[3] = Buffer64ReadByte(&uart1_input_buffer);
-      recieveMessage[4] = Buffer64ReadByte(&uart1_input_buffer);
-      recieveMessage[5] = Buffer64ReadByte(&uart1_input_buffer);
-      recieveMessage[6] = Buffer64ReadByte(&uart1_input_buffer);
-      recieveMessage[7] = Buffer64ReadByte(&uart1_input_buffer);
-      crc = Buffer64ReadByte(&uart1_input_buffer);
+      recieveMessage[1] = BufferByte64ReadByte(&uart1_input_buffer);
+      recieveMessage[2] = BufferByte64ReadByte(&uart1_input_buffer);
+      recieveMessage[3] = BufferByte64ReadByte(&uart1_input_buffer);
+      recieveMessage[4] = BufferByte64ReadByte(&uart1_input_buffer);
+      recieveMessage[5] = BufferByte64ReadByte(&uart1_input_buffer);
+      recieveMessage[6] = BufferByte64ReadByte(&uart1_input_buffer);
+      recieveMessage[7] = BufferByte64ReadByte(&uart1_input_buffer);
+      crc = BufferByte64ReadByte(&uart1_input_buffer);
       crc <<=8;
-      crc += Buffer64ReadByte(&uart1_input_buffer);
+      crc += BufferByte64ReadByte(&uart1_input_buffer);
 
       if (crc == ETMCRC16(&recieveMessage[0], 8))
       {
@@ -223,7 +207,7 @@ void A36613DownloadData(unsigned char *msg_data)
 void __attribute__((interrupt(__save__(CORCON,SR)),no_auto_psv)) UART_RX_INTERRUPT(void) {
   UART_RX_IF = 0;
   while (U1STAbits.URXDA) {
-    Buffer64WriteByte(&uart1_input_buffer, U1RXREG);
+    BufferByte64WriteByte(&uart1_input_buffer, U1RXREG);
   }
 }
 
@@ -231,8 +215,8 @@ void __attribute__((interrupt(__save__(CORCON,SR)),no_auto_psv)) UART_RX_INTERRU
 
 void __attribute__((interrupt(__save__(CORCON,SR)),no_auto_psv)) UART_TX_INTERRUPT(void) {
   UART_TX_IF = 0;
-  if ((!UART_STATS_BITS.UTXBF) && (Buffer64IsNotEmpty(&uart1_output_buffer) ))
+  if ((!UART_STATS_BITS.UTXBF) && (BufferByte64IsNotEmpty(&uart1_output_buffer) ))
     { //fill TX REG and then wait for interrupt to fill the rest.
-      U1TXREG =  Buffer64ReadByte(&uart1_output_buffer);
+      U1TXREG =  BufferByte64ReadByte(&uart1_output_buffer);
     }
 }

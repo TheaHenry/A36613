@@ -1,11 +1,8 @@
 /*
   Module Description
-  Only one type of message can be sent and only one type of message can be received.
-  Recieved data is 1 ID byte, 4 bytes of data and 2 bytes of crc.
-  The uart module calculates the crc for transmitting, and checks it upon receiving.
+    The uart module calculates the crc for transmitting, and checks it upon receiving.
   If crc does not match, message is ignored.
-  Module assumes there is a defined amount of time allowed per message- period between 2 messages is checked using timer4 (receiving) and timer5 (transmitting).
-
+  
 
 
   Assumptions
@@ -17,7 +14,7 @@
 #ifndef __SERIAL_H
 #define __SERIAL_H
 
-#include "ETM_CRC.h"
+#include "ETM.h"
 
 
 
