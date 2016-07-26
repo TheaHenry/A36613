@@ -1,5 +1,15 @@
 #include "A36613.h"
 
+#define OLL_LED_ON    0
+#define OLL_LED_OFF   1
+
+void TurnHeaterOn(void);
+void TurnHeaterOff(void);
+unsigned int CheckHeaterFault(void);
+void DoA36613(void);
+void FlashLED(void);
+#define MAX_AUTO_RESET_HEATER_COUNT  5
+
 
 // This is the firmware for modulator- HV section
 
@@ -56,8 +66,8 @@ void InitializeA36613(void);
 void UpdateTopVoltage(void);
 void UpdateHeaterPWM(void);
 void ConfigureClock(void);
-void CheckHeaterFaults(void);
-void ResetHeater(void);
+void UpdateHeaterFaults(void);
+//void ResetHeater(void);
 
 
 unsigned int top1_voltage_monitor_accumulator;
@@ -71,7 +81,6 @@ unsigned int top2_fdbk_voltage_accumulator_size;
 unsigned int bias_feedback_accumulator;
 
 unsigned char transmit_message;
-unsigned int flashDuration;
 unsigned int heater_reset_counter;
 
 #define ACCUMULATOR_SIZE  64 
@@ -105,146 +114,124 @@ void DoStateMachine(void) {
     
   case STATE_STARTUP:
     InitializeA36613();
-    global_data_A36613.control_state = STATE_WARMUP;
+    transmit_message=0xF0;
+    global_data_A36613.heater_warmup_fault_counter = 0;
     while(!A36613ReceiveData()) {
       if (_T3IF ) { 
 	//every 500us
 	_T3IF = 0;
-        A36613TransmitData(0xF0);
+        A36613TransmitData(transmit_message);
       }
     }
+    global_data_A36613.control_state = STATE_WARMUP;
     break;
     
   case STATE_WARMUP:
-    PIN_LED_OPERATIONAL_GREEN = 1;
-    PIN_LED_TEST_POINT_B = 1;
-    PIN_LED_TEST_POINT_A = 0;
-    transmit_message=0xF0;
-    flashDuration = 1000;
-    unsigned int heater_warmup_counter = 0;
-
+    PIN_LED_TEST_POINT_A = OLL_LED_ON;
+    PIN_LED_TEST_POINT_B = OLL_LED_OFF;
+    global_data_A36613.heater_ramp_up_counter = 0;
+    global_data_A36613.status |= HEATER_NOT_READY;
+    TurnHeaterOn();
     while(global_data_A36613.control_state == STATE_WARMUP) {
-      _PTEN =1; //Turn heater on
-      A36613ReceiveData();
-      if (_T3IF ) { 
-	//every 500us
-	_T3IF = 0;
-        flashDuration--;
-	if (transmit_message > 0xF4) {
-	  transmit_message = 0xF0;
-        }
-        A36613TransmitData(transmit_message);
-        transmit_message++;
-        UpdateHeaterPWM();
-        CheckHeaterFaults();
-      }
-      
-      if (flashDuration ==0) {
-	//every 500ms
-	flashDuration = 1000;
-        heater_warmup_counter++;
-	
-        if(PIN_LED_OPERATIONAL_GREEN==1) {
-	  //LED turns on once a second
-	  PIN_LED_OPERATIONAL_GREEN=0;
-        } else {
-          PIN_LED_OPERATIONAL_GREEN=1;
-        }
+      DoA36613();
+
+      if ((Heater_output_voltage.reading_scaled_and_calibrated > (global_data_A36613.heater_set_voltage - 100)) && (global_data_A36613.heater_ramp_up_counter > 20000)) {
+	// We are within 100mV of the program voltage & the warmup has been going for at least 10 seconds
+	if (CheckHeaterFault()) {
+	  global_data_A36613.control_state = STATE_HEATER_FAULT;
+	} else {
+	  global_data_A36613.control_state = STATE_READY;
+ 	}
       }
 
-      if (heater_warmup_counter >= HEATER_WARMUP_DURATION) {
-        global_data_A36613.control_state = STATE_READY;
-      }
-      if (global_data_A36613.status & 0x80 ) {
-	// clear heater faults.
-        global_data_A36613.status &= 0x00;
-        heater_reset_counter = 0;
+      if (global_data_A36613.heater_ramp_up_counter >= MAX_HEATER_RAMP_UP) {
+        global_data_A36613.control_state = STATE_HEATER_FAULT;
       }
     }
     break;
 
   case STATE_READY:
-    PIN_LED_OPERATIONAL_GREEN = 1;
-    PIN_LED_TEST_POINT_A = 1;
-    PIN_LED_TEST_POINT_B = 0;
-    transmit_message=0xF0;
-    flashDuration = 1000;
-    _PTEN = 1;
-    global_data_A36613.status &= 0xEF; //heater is ready.
+    PIN_LED_TEST_POINT_A = OLL_LED_OFF;
+    PIN_LED_TEST_POINT_B = OLL_LED_ON;
+    global_data_A36613.heater_warmup_fault_counter = 0;
+    global_data_A36613.status &= ~HEATER_NOT_READY;
     while(global_data_A36613.control_state == STATE_READY) {
-      A36613ReceiveData();
-      if (_T3IF ) { 
-	//every 500us
-	_T3IF = 0;
-        flashDuration--;
-        if (transmit_message > 0xF4) {
-          transmit_message = 0xF0;
-        }
-        A36613TransmitData(transmit_message);
-        transmit_message++;
-        UpdateHeaterPWM();
-        CheckHeaterFaults();
+      DoA36613();
+      
+      if (CheckHeaterFault()) {
+	global_data_A36613.control_state = STATE_HEATER_FAULT;
       }
       
-      if (flashDuration == 0) { 
-	//every 500ms
-	flashDuration = 1000;
-        if(PIN_LED_OPERATIONAL_GREEN==1) { 
-	  //LED turns on once a second
-	  PIN_LED_OPERATIONAL_GREEN=0;
-        } else {
-          PIN_LED_OPERATIONAL_GREEN=1;
-        }  
-      }
-      
-      if (global_data_A36613.status & 0x0080) {
-	// clear heater faults.
-	global_data_A36613.status &= 0x00;
-        heater_reset_counter = 0;
-      }
     }
     break;
  
 
-  case STATE_FAULT:
-    PIN_LED_OPERATIONAL_GREEN = 1;
-    PIN_LED_TEST_POINT_B = 1;
-    PIN_LED_TEST_POINT_A = 1;
-    transmit_message=0xF0;
-    flashDuration = 1000;
+  case STATE_HEATER_FAULT:
+    PIN_LED_TEST_POINT_B = OLL_LED_ON;
+    PIN_LED_TEST_POINT_A = OLL_LED_ON;
+    global_data_A36613.heater_warmup_fault_counter++;
+    TurnHeaterOff();
+    global_data_A36613.status |= HEATER_NOT_READY;
+    global_data_A36613.fault_off_counter = 0;
+    while (global_data_A36613.control_state == STATE_HEATER_FAULT) {
+      DoA36613();
 
-    while(global_data_A36613.control_state == STATE_FAULT) {
-      global_data_A36613.status |= HEATER_NOT_READY;
-      A36613ReceiveData();
-      if (_T3IF ) { 
-	//every 400us
-	_T3IF = 0;
-        flashDuration--;
-	if (transmit_message > 0xF4) {
-          transmit_message = 0xF0;
-        }
-        A36613TransmitData(transmit_message);
-        transmit_message++;
+#define FAULT_OFF_TIME 10000       // 5 Seconds
+
+      if (global_data_A36613.fault_off_counter >= FAULT_OFF_TIME) {
+	global_data_A36613.fault_off_counter = FAULT_OFF_TIME;
+
+	if ((global_data_A36613.heater_warmup_fault_counter <= MAX_AUTO_RESET_HEATER_COUNT) || (global_data_A36613.status & 0x80)) {
+	  global_data_A36613.control_state = STATE_WARMUP;
+	  global_data_A36613.status &= 0b11110000;
+	  ETMAnalogClearFaultCounters(&Heater_output_voltage);
+	  ETMAnalogClearFaultCounters(&Heater1_current);
+	  ETMAnalogClearFaultCounters(&Heater2_current);
+	}
       }
-
-      if (flashDuration ==0) {
-	//every 500ms
-	flashDuration = 1250;
-
-        if(PIN_LED_OPERATIONAL_GREEN==1) {
-	  //LED turns on once a second
-	  PIN_LED_OPERATIONAL_GREEN=0;
-        } else {
-          PIN_LED_OPERATIONAL_GREEN=1;
-        }
-      }        
     }
     break;
     
   default:
-    global_data_A36613.control_state = STATE_WARMUP;
+    global_data_A36613.control_state = STATE_HEATER_FAULT;
     break;
     
+  }
+}
+
+
+void DoA36613(void) {
+  A36613ReceiveData();
+  if (_T3IF ) { 
+    //every 500us
+    _T3IF = 0;
+    A36613TransmitData(transmit_message);
+    transmit_message++;
+    if (transmit_message > 0xF4) {
+      transmit_message = 0xF0;
+    }
+    if (global_data_A36613.control_state != STATE_HEATER_FAULT) {
+      UpdateHeaterPWM();
+    }
+    UpdateHeaterFaults();
+    FlashLED();
+    global_data_A36613.heater_ramp_up_counter++;
+    global_data_A36613.fault_off_counter++;
+  }
+}
+
+
+void FlashLED(void) {
+  // This will flash the Led once every 500ms
+  global_data_A36613.led_flash_counter++;
+  if (global_data_A36613.led_flash_counter >= 1000) {
+    global_data_A36613.led_flash_counter = 0;
+    if(PIN_LED_OPERATIONAL_GREEN == 1) {
+      //LED turns on once a second
+      PIN_LED_OPERATIONAL_GREEN = 0;
+    } else {
+      PIN_LED_OPERATIONAL_GREEN = 1;
+    }
   }
 }
 
@@ -419,45 +406,52 @@ void InitializeA36613(void) {
 
 void UpdateHeaterPWM(void) {
   unsigned int Heater_error;
-  if ((Heater1_current.reading_scaled_and_calibrated >= HEATER_MAX_CURRENT)|| (Heater2_current.reading_scaled_and_calibrated >= HEATER_MAX_CURRENT)) {
-    MDC-=HEATER_SMALL_STEP;
+  unsigned int master_duty_cycle_register;
+
+  master_duty_cycle_register = MDC;
+
+  if ((Heater1_current.reading_scaled_and_calibrated >= HEATER_MAX_CURRENT) || (Heater2_current.reading_scaled_and_calibrated >= HEATER_MAX_CURRENT)) {
+    master_duty_cycle_register-=HEATER_SMALL_STEP;
   } else if (Heater_output_voltage.reading_scaled_and_calibrated > global_data_A36613.heater_set_voltage) {
     Heater_error = Heater_output_voltage.reading_scaled_and_calibrated - global_data_A36613.heater_set_voltage;
     if (Heater_error > 100) {
-      MDC-=HEATER_SMALL_STEP;
+      master_duty_cycle_register-=HEATER_SMALL_STEP;
     }
     if (Heater_error > 1000) {
-      MDC-= HEATER_LARGE_STEP;
+      master_duty_cycle_register-= HEATER_LARGE_STEP;
     }
-    /*
-      if (Heater_error < 100) // Heater warm up duration is currently managed by duration, not a stable voltage.
-      {
-      global_data_A36613.control_state = STATE_READY;
-      } 
-    */
-      
   } else if (Heater_output_voltage.reading_scaled_and_calibrated < global_data_A36613.heater_set_voltage) {
     Heater_error = global_data_A36613.heater_set_voltage - Heater_output_voltage.reading_scaled_and_calibrated;
     if (Heater_error > 100) {
-      MDC+=HEATER_SMALL_STEP;
+      master_duty_cycle_register+=HEATER_SMALL_STEP;
     }
     if (Heater_error > 1000) {
-      MDC+= HEATER_LARGE_STEP;
+      master_duty_cycle_register+= HEATER_LARGE_STEP;
     }
-    if (Heater_error < 100) {
-      global_data_A36613.control_state = STATE_READY;
-    }      
   } 
   
-  if (MDC <= 64) {
-    MDC = 64;
+  if (master_duty_cycle_register <= 64) {
+    master_duty_cycle_register = 64;
   }
   
-  if (MDC >= HEATER_MAX_DUTY) {
-    MDC= HEATER_MAX_DUTY;
+  if (master_duty_cycle_register >= HEATER_MAX_DUTY) {
+    master_duty_cycle_register= HEATER_MAX_DUTY;
   }
+  
+  MDC = master_duty_cycle_register;
+
 }
 
+
+void TurnHeaterOn(void) {
+  _PTEN = 1;
+  MDC = 0;
+}
+
+void TurnHeaterOff(void) {
+  _PTEN = 0;
+  MDC = 0;
+}
 
 
 void UpdateTopVoltage(void) {
@@ -465,54 +459,41 @@ void UpdateTopVoltage(void) {
   WriteLTC265X(&U4_LTC2654, LTC265X_WRITE_AND_UPDATE_DAC_B , global_data_A36613.top2_set_voltage);
 }
 
-void CheckHeaterFaults(void) {
-  if (ETMAnalogCheckOverAbsolute(&Heater_output_voltage)) {
-    //Over voltage condition
-    global_data_A36613.status |= HEATER_OVERVOLTAGE_FLT;
-    heater_reset_counter++;
-    ResetHeater();
-  }
+void UpdateHeaterFaults(void) {
   
+  //Over voltage condition
+  if (ETMAnalogCheckOverAbsolute(&Heater_output_voltage)) {
+    global_data_A36613.status |= HEATER_OVERVOLTAGE_FLT;
+  }
+
+  //Over current condition
   if (ETMAnalogCheckOverAbsolute(&Heater1_current) || ETMAnalogCheckOverAbsolute(&Heater2_current)) {
-    //Over current condition
-    global_data_A36613.status |= HEATER_OVERCURRENT_FLT;
-    heater_reset_counter++;
-    ResetHeater();
+      global_data_A36613.status |= HEATER_OVERCURRENT_FLT;
   }
 
-  if (global_data_A36613.control_state == STATE_READY) {
+  // Under current condition
+  if (ETMAnalogCheckUnderAbsolute(&Heater1_current) || ETMAnalogCheckUnderAbsolute(&Heater2_current)) {
     // heater undervoltage and undercurrent should only be checked after warmup.
-    if (ETMAnalogCheckUnderAbsolute(&Heater1_current) || ETMAnalogCheckUnderAbsolute(&Heater2_current)) {
-      // Under current condition
-      global_data_A36613.status |= HEATER_UNDERCURRENT_FLT;
-      // heater_reset_counter++;
-      // ResetHeater();
-    }
+    global_data_A36613.status |= HEATER_UNDERCURRENT_FLT;
+  } else if (global_data_A36613.control_state == STATE_WARMUP) {
+    global_data_A36613.status &= ~HEATER_UNDERCURRENT_FLT;
+  }
 
-    if (ETMAnalogCheckUnderAbsolute(&Heater_output_voltage)) { 
-      //Under voltage condition
-      global_data_A36613.status |= HEATER_UNDERVOLTAGE_FLT;
-      heater_reset_counter++;
-      ResetHeater();
-    }
+  //Under voltage condition  
+  if (ETMAnalogCheckUnderAbsolute(&Heater_output_voltage)) { 
+    // heater undervoltage and undercurrent should only be checked after warmup.
+    global_data_A36613.status |= HEATER_UNDERVOLTAGE_FLT;
+  } else if (global_data_A36613.control_state == STATE_WARMUP) {
+    global_data_A36613.status &= ~HEATER_UNDERVOLTAGE_FLT;
   }
 }
 
-
-void ResetHeater(void) {
-  _PTEN = 0;
-  if(heater_reset_counter>=3) { 
-    global_data_A36613.status |=0x10; //heater not ready
-    global_data_A36613.control_state = STATE_FAULT;
+unsigned int CheckHeaterFault(void) {
+  if (global_data_A36613.status & 0b00001111) {
+    return 1;
   }
-  Heater_output_voltage.absolute_over_counter=0;
-  Heater_output_voltage.absolute_under_counter=0;
-  Heater1_current.absolute_over_counter=0;
-  Heater1_current.absolute_under_counter=0;
-  Heater2_current.absolute_over_counter=0;
-  Heater2_current.absolute_under_counter=0;
+  return 0;
 }
-
 
 void __attribute__((interrupt, auto_psv)) _ADCP0Interrupt(void) {
   top1_voltage_feedback_accumulator += ADCBUF1; // averages 64 samples of data (add 64, then shift left by 6). Then shifts the data to get a 8bit number (additional shift of 2).
@@ -623,6 +604,12 @@ void __attribute__((interrupt, no_auto_psv)) _DefaultInterrupt(void) {
   Nop();
   Nop();
   Nop();
-
+  __asm__ ("Reset");
 }
 
+void ETMAnalogClearFaultCounters(AnalogInput* ptr_analog_input) {
+  ptr_analog_input->absolute_under_counter = 0;
+  ptr_analog_input->absolute_over_counter = 0;
+  ptr_analog_input->over_trip_counter = 0;
+  ptr_analog_input->under_trip_counter = 0;
+}

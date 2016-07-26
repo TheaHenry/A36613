@@ -134,6 +134,7 @@ void A36613LoadData(unsigned char message_type)
 
 void A36613TransmitData(unsigned char message_type)
 {
+  /*
   if (PIN_LED_TEST_POINT_A == 0)
   {
       PIN_LED_TEST_POINT_A =1;
@@ -142,11 +143,13 @@ void A36613TransmitData(unsigned char message_type)
   {
       PIN_LED_TEST_POINT_A = 0;
   }
+  */
   A36613LoadData(message_type);
   if ((!UART_STATS_BITS.UTXBF) && (BufferByte64IsNotEmpty(&uart1_output_buffer)) )
   { //fill TX REG and then wait for interrupt to fill the rest.
     U1TXREG =  BufferByte64ReadByte(&uart1_output_buffer);
   }
+  /*
   if (PIN_LED_TEST_POINT_A == 0)
   {
       PIN_LED_TEST_POINT_A =1;
@@ -155,6 +158,7 @@ void A36613TransmitData(unsigned char message_type)
   {
       PIN_LED_TEST_POINT_A = 0;
   }
+  */
 };
 
 int A36613ReceiveData(void)
@@ -195,7 +199,12 @@ int A36613ReceiveData(void)
 
 void A36613DownloadData(unsigned char *msg_data)
 {
-  global_data_A36613.status = msg_data[1];
+  unsigned char status_msg;
+  //global_data_A36613.status = msg_data[1];
+  status_msg = msg_data[1];
+  status_msg &= 0b11100000;
+  global_data_A36613.status &= 0b00011111;
+  global_data_A36613.status |= status_msg;
   global_data_A36613.top1_set_voltage = (msg_data[2]<<8) + (msg_data[3] &0x00FF);
   global_data_A36613.top2_set_voltage = (msg_data[4]<<8) + (msg_data[5] &0x00FF);
   global_data_A36613.heater_set_voltage = (msg_data[6]<<8) + (msg_data[7] &0x00FF);

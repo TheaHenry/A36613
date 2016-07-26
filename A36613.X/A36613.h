@@ -112,10 +112,10 @@
 #define ADCPC1_SETTING          (ADC_AN7_6_IR_GEN_EN | ADC_AN7_6_TRIG_TMR1 | ADC_AN5_4_IR_GEN_EN | ADC_AN5_4_TRIG_TMR1)
 #define ADCPC2_SETTING          (ADC_AN11_10_IR_GEN_EN | ADC_AN11_10_TRIG_TMR1 | ADC_AN9_8_IR_GEN_EN | ADC_AN9_8_TRIG_TMR1)
 
-#define STATE_STARTUP   0x10
-#define STATE_WARMUP    0x20
-#define STATE_READY     0x30
-#define STATE_FAULT     0x40  
+#define STATE_STARTUP          0x10
+#define STATE_WARMUP           0x20
+#define STATE_READY            0x30
+#define STATE_HEATER_FAULT     0x40  
 
 
 //---------------    Heater Settings  ------------------------//
@@ -124,17 +124,17 @@
 //#define Heater_Kd Q15(0)
 #define HEATER_VOLTAGE_SCALING_FACTOR MACRO_DEC_TO_SCALE_FACTOR_16(0.25177) //convert from feedback voltage on the pin to 1mV per bit
 #define HEATER_CURRENT_SCALING_FACTOR MACRO_DEC_TO_SCALE_FACTOR_16(0.062943) // convert from feedback current on the pin to 1mA per bit
-#define HEATER_OVERVOLTAGE_TRIP   10000 //10V
-#define HEATER_OVERCURRENT_TRIP   2500 //2.5A
-#define HEATER_UNDERVOLTAGE_TRIP  5000 //5V
-#define HEATER_UNDERCURRENT_TRIP  500 // 0.5A
-#define HEATER_MAX_CURRENT        2000 //2A
-#define HEATER_WARMUP_DURATION    20 // 10 seconds
-#define ABSOLUTE_TRIP_COUNTER  100
-
+#define HEATER_OVERVOLTAGE_TRIP   8000  // 8V
+#define HEATER_OVERCURRENT_TRIP   1000  // 1A
+#define HEATER_UNDERVOLTAGE_TRIP  6000  // 6V
+#define HEATER_UNDERCURRENT_TRIP  100   // 0.100A
+#define HEATER_MAX_CURRENT        800   // .8A
+#define MAX_HEATER_RAMP_UP        120000 // 60 seconds
+#define ABSOLUTE_TRIP_COUNTER     1000    // 500 milli seconds
+ 
 #define HEATER_OVERVOLTAGE_FLT    0x01
-#define HEATER_UNDERVOLTAGE_FLT    0x02
-#define HEATER_OVERCURRENT_FLT   0x04
+#define HEATER_UNDERVOLTAGE_FLT   0x02
+#define HEATER_OVERCURRENT_FLT    0x04
 #define HEATER_UNDERCURRENT_FLT   0x08
 #define HEATER_NOT_READY          0x10
 
@@ -151,6 +151,12 @@ typedef struct {
   unsigned int top2_voltage_feedback;
   unsigned int bias_feedback;
   unsigned char status;
+
+  unsigned int heater_ramp_done;
+  unsigned int heater_warmup_fault_counter;
+  unsigned long heater_ramp_up_counter;
+  unsigned int led_flash_counter;
+  unsigned int fault_off_counter;
 } ControlData;
 
 
