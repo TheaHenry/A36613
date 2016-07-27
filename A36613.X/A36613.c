@@ -202,7 +202,12 @@ void DoStateMachine(void) {
 
 void DoA36613(void) {
   A36613ReceiveData();
-  if (_T3IF ) { 
+  if (_T3IF ) {
+    if (global_data_A36613.heater_ramp_voltage < global_data_A36613.heater_set_voltage) {
+      global_data_A36613.heater_ramp_voltage++;
+    } else {
+      global_data_A36613.heater_ramp_voltage = global_data_A36613.heater_set_voltage;
+    }
     //every 500us
     _T3IF = 0;
     A36613TransmitData(transmit_message);
@@ -412,16 +417,16 @@ void UpdateHeaterPWM(void) {
 
   if ((Heater1_current.reading_scaled_and_calibrated >= HEATER_MAX_CURRENT) || (Heater2_current.reading_scaled_and_calibrated >= HEATER_MAX_CURRENT)) {
     master_duty_cycle_register-=HEATER_SMALL_STEP;
-  } else if (Heater_output_voltage.reading_scaled_and_calibrated > global_data_A36613.heater_set_voltage) {
-    Heater_error = Heater_output_voltage.reading_scaled_and_calibrated - global_data_A36613.heater_set_voltage;
+  } else if (Heater_output_voltage.reading_scaled_and_calibrated > global_data_A36613.heater_ramp_voltage) {
+    Heater_error = Heater_output_voltage.reading_scaled_and_calibrated - global_data_A36613.heater_ramp_voltage;
     if (Heater_error > 100) {
       master_duty_cycle_register-=HEATER_SMALL_STEP;
     }
     if (Heater_error > 1000) {
       master_duty_cycle_register-= HEATER_LARGE_STEP;
     }
-  } else if (Heater_output_voltage.reading_scaled_and_calibrated < global_data_A36613.heater_set_voltage) {
-    Heater_error = global_data_A36613.heater_set_voltage - Heater_output_voltage.reading_scaled_and_calibrated;
+  } else if (Heater_output_voltage.reading_scaled_and_calibrated < global_data_A36613.heater_ramp_voltage) {
+    Heater_error = global_data_A36613.heater_ramp_voltage - Heater_output_voltage.reading_scaled_and_calibrated;
     if (Heater_error > 100) {
       master_duty_cycle_register+=HEATER_SMALL_STEP;
     }
@@ -446,6 +451,7 @@ void UpdateHeaterPWM(void) {
 void TurnHeaterOn(void) {
   _PTEN = 1;
   MDC = 0;
+  global_data_A36613.heater_ramp_voltage = 0;
 }
 
 void TurnHeaterOff(void) {

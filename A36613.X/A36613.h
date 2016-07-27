@@ -157,6 +157,7 @@ typedef struct {
   unsigned long heater_ramp_up_counter;
   unsigned int led_flash_counter;
   unsigned int fault_off_counter;
+  unsigned int heater_ramp_voltage;
 } ControlData;
 
 
